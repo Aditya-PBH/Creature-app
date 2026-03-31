@@ -7,16 +7,12 @@
     "userInterfaceStyle": "dark",
     "android": {
       "package": "com.creature.app",
-      "versionCode": 1
-    },
-    "ios": {
-      "bundleIdentifier": "com.creature.app"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "4c70ef35-09c6-4e5c-ac5b-0ae5d0634cbe"
-      }
-    },
-    "owner": "adi72"
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    }
   }
 }
