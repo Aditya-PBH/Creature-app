@@ -10,7 +10,7 @@
     },
     "android": {
       "package": "com.creature.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"]
     },
     "ios": {
