@@ -6,11 +6,11 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "splash": {
-      "backgroundColor": "#0a0a0a"
+      "backgroundColor": "#000000"
     },
     "android": {
       "package": "com.creature.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"]
     },
     "ios": {
