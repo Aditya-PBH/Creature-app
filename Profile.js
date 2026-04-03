@@ -1,103 +1,206 @@
-import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, StyleSheet, Dimensions, Share } from 'react-native';
+// 👤 Profile.js — Premium Profile Screen
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, Image, FlatList, TouchableOpacity, StyleSheet,
+  SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView
+} from 'react-native';
+import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db, auth } from './firebase';
 
-const W = Dimensions.get('window').width;
+const { width } = Dimensions.get('window');
+const GRID = (width - 4) / 3;
+const PURPLE = '#8B5CF6';
+const PINK = '#EC4899';
+const DARK = '#0A0A0F';
+const CARD = '#13131A';
+const BORDER = '#1E1E2E';
 
-const GRID = Array.from({ length: 9 }, (_, i) => ({
-  id: String(i + 1),
-  uri: 'https://picsum.photos/seed/prof' + (i + 1) + '/300/300',
-}));
+export default function ProfileScreen({ onLogout }) {
+  const [userData, setUserData] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const uid = auth.currentUser?.uid;
 
-export default function ProfileScreen({ user }) {
-  const [activeTab, setActiveTab] = useState('posts');
+  useEffect(() => {
+    if (!uid) return;
+    getDoc(doc(db, 'users', uid)).then(snap => {
+      if (snap.exists()) setUserData(snap.data());
+      setLoading(false);
+    });
+    const q = query(collection(db, 'posts'), where('uid', '==', uid));
+    const unsub = onSnapshot(q, snap => {
+      const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setPosts(sorted);
+    });
+    return unsub;
+  }, [uid]);
+
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Pakka logout karna hai?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: onLogout },
+    ]);
+  };
+
+  if (loading) return (
+    <View style={s.center}><ActivityIndicator color={PURPLE} size="large" /></View>
+  );
+
+  const user = userData || {};
 
   return (
-    <ScrollView style={s.bg} showsVerticalScrollIndicator={false}>
+    <View style={s.safe}>
+      {/* HEADER */}
       <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.username}>{user ? user.username : 'adi72'}</Text>
+        <Text style={s.headerName}>{user.username || auth.currentUser?.displayName || 'User'}</Text>
+        <TouchableOpacity onPress={handleLogout} style={s.settingsBtn}>
+          <Text style={s.settingsIcon}>⚙️</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* PROFILE TOP */}
+        <View style={s.profileTop}>
+          {/* Avatar with gradient ring */}
+          <View style={s.avatarRing}>
+            <Image
+              source={{ uri: user.avatar || auth.currentUser?.photoURL || `https://i.pravatar.cc/150?u=${uid}` }}
+              style={s.avatar}
+            />
+          </View>
+
+          {/* Stats */}
+          <View style={s.statsRow}>
+            {[
+              { label: 'Posts', value: posts.length },
+              { label: 'Followers', value: user.followers || 0 },
+              { label: 'Following', value: user.following || 0 },
+            ].map(stat => (
+              <View key={stat.label} style={s.statItem}>
+                <Text style={s.statNum}>{stat.value.toLocaleString()}</Text>
+                <Text style={s.statLabel}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-        <TouchableOpacity style={{ marginRight: 14 }}>
-          <Text style={{ fontSize: 24, color: '#fff' }}>➕</Text>
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <Text style={{ fontSize: 24, color: '#fff' }}>☰</Text>
-        </TouchableOpacity>
-      </View>
 
-      <View style={s.profInfo}>
-        <Image source={{ uri: 'https://i.pravatar.cc/100?img=10' }} style={s.profAv} />
-        <View style={s.statsRow}>
-          {[['9', 'Posts'], ['1.2K', 'Followers'], ['342', 'Following']].map(([val, lbl]) => (
-            <View key={lbl} style={s.stat}>
-              <Text style={s.statVal}>{val}</Text>
-              <Text style={s.statLbl}>{lbl}</Text>
-            </View>
-          ))}
+        {/* BIO */}
+        <View style={s.bioSection}>
+          <Text style={s.bioName}>{user.name || auth.currentUser?.displayName || 'Creature User'}</Text>
+          {user.bio ? <Text style={s.bioText}>{user.bio}</Text> : null}
         </View>
-      </View>
 
-      <View style={{ paddingHorizontal: 16, marginBottom: 14 }}>
-        <Text style={s.displayName}>{user ? user.name : 'Aditya'}</Text>
-        <Text style={s.bio}>🐾 Creature user{'\n'}India 🇮🇳 | Building cool stuff</Text>
-      </View>
-
-      <View style={s.btnRow}>
-        <TouchableOpacity style={s.editBtn}>
-          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Edit Profile</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.shareBtn} onPress={() => Share.share({ message: 'Creature pe mera profile dekh! @' + (user ? user.username : 'adi72') })}>
-          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Share Profile</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={s.tabRow}>
-        <TouchableOpacity style={[s.tab, activeTab === 'posts' && s.tabActive]} onPress={() => setActiveTab('posts')}>
-          <Text style={s.tabIcon}>⊞</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === 'reels' && s.tabActive]} onPress={() => setActiveTab('reels')}>
-          <Text style={s.tabIcon}>🎬</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === 'tagged' && s.tabActive]} onPress={() => setActiveTab('tagged')}>
-          <Text style={s.tabIcon}>🏷️</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={GRID} keyExtractor={i => i.id}
-        numColumns={3} scrollEnabled={false}
-        renderItem={({ item }) => (
-          <TouchableOpacity>
-            <Image source={{ uri: item.uri }} style={{ width: W / 3 - 1, height: W / 3 - 1, margin: 0.5 }} />
+        {/* EDIT PROFILE */}
+        <View style={s.btnRow}>
+          <TouchableOpacity style={s.editBtn}>
+            <Text style={s.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
-        )}
-      />
+          <TouchableOpacity style={s.shareBtn}>
+            <Text style={s.shareBtnText}>Share Profile</Text>
+          </TouchableOpacity>
+        </View>
 
-      <TouchableOpacity style={s.logoutBtn}>
-        <Text style={{ color: '#ff3b5c', fontWeight: '700' }}>Logout</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* POSTS GRID */}
+        <View style={s.gridSection}>
+          {posts.length === 0 ? (
+            <View style={s.noPostsWrap}>
+              <View style={s.noPostsIcon}>
+                <Text style={s.noPostsIconText}>📷</Text>
+              </View>
+              <Text style={s.noPostsTitle}>No Posts Yet</Text>
+              <Text style={s.noPostsSub}>Share your first moment!</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={posts}
+              numColumns={3}
+              scrollEnabled={false}
+              keyExtractor={i => i.id}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity style={[s.gridItem, index % 3 !== 2 && { marginRight: 2 }]}>
+                  <Image source={{ uri: item.imageUrl }} style={s.gridImg} />
+                  {item.likes?.length > 0 && (
+                    <View style={s.gridOverlay}>
+                      <Text style={s.gridLikes}>❤️ {item.likes.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={{ height: 2 }} />}
+            />
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 14 },
-  username: { color: '#fff', fontSize: 20, fontWeight: '900' },
-  profInfo: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
-  profAv: { width: 88, height: 88, borderRadius: 44, borderWidth: 3, borderColor: '#ff3b5c' },
+  safe: { flex: 1, backgroundColor: DARK },
+  center: { flex: 1, backgroundColor: DARK, justifyContent: 'center', alignItems: 'center' },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: BORDER,
+  },
+  headerName: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  settingsBtn: { padding: 4 },
+  settingsIcon: { fontSize: 22 },
+
+  profileTop: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 20, gap: 24,
+  },
+  avatarRing: {
+    width: 90, height: 90, borderRadius: 45,
+    padding: 3, backgroundColor: PURPLE,
+    shadowColor: PURPLE, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5, shadowRadius: 12, elevation: 10,
+  },
+  avatar: { width: '100%', height: '100%', borderRadius: 42, borderWidth: 2, borderColor: DARK },
+
   statsRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
-  stat: { alignItems: 'center' },
-  statVal: { color: '#fff', fontWeight: '900', fontSize: 18 },
-  statLbl: { color: '#888', fontSize: 12 },
-  displayName: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  bio: { color: '#aaa', fontSize: 13, marginTop: 4, lineHeight: 18 },
-  btnRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16 },
-  editBtn: { flex: 1, backgroundColor: '#1e1e1e', borderRadius: 10, padding: 10, alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#333' },
-  shareBtn: { flex: 1, backgroundColor: '#1e1e1e', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
-  tabRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#1a1a1a', borderBottomWidth: 1, borderBottomColor: '#1a1a1a', marginBottom: 1 },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: '#fff' },
-  tabIcon: { fontSize: 20 },
-  logoutBtn: { margin: 24, backgroundColor: '#1e1e1e', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#ff3b5c' },
+  statItem: { alignItems: 'center' },
+  statNum: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  statLabel: { color: '#666', fontSize: 12, marginTop: 2 },
+
+  bioSection: { paddingHorizontal: 16, paddingBottom: 16 },
+  bioName: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  bioText: { color: '#aaa', fontSize: 14, marginTop: 4, lineHeight: 20 },
+
+  btnRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 20 },
+  editBtn: {
+    flex: 1, backgroundColor: CARD, borderRadius: 12,
+    paddingVertical: 9, alignItems: 'center',
+    borderWidth: 1, borderColor: BORDER,
+  },
+  editBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  shareBtn: {
+    flex: 1, backgroundColor: CARD, borderRadius: 12,
+    paddingVertical: 9, alignItems: 'center',
+    borderWidth: 1, borderColor: BORDER,
+  },
+  shareBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+
+  gridSection: { borderTopWidth: 1, borderTopColor: BORDER },
+  gridItem: { width: GRID, height: GRID, marginBottom: 2 },
+  gridImg: { width: '100%', height: '100%', backgroundColor: CARD },
+  gridOverlay: {
+    position: 'absolute', bottom: 6, left: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 3,
+  },
+  gridLikes: { color: '#fff', fontSize: 11, fontWeight: '600' },
+
+  noPostsWrap: { alignItems: 'center', paddingVertical: 60 },
+  noPostsIcon: {
+    width: 72, height: 72, borderRadius: 22, backgroundColor: CARD,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: BORDER, marginBottom: 16,
+  },
+  noPostsIconText: { fontSize: 32 },
+  noPostsTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  noPostsSub: { color: '#666', fontSize: 14, marginTop: 6 },
 });
+    
