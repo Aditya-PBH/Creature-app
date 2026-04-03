@@ -1,5 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+
+const stories = [
+  { id: '1', user: 'Aditya', image: 'https://i.pravatar.cc/100' },
+  { id: '2', user: 'Rahul', image: 'https://i.pravatar.cc/101' },
+];
 
 const posts = [
   {
@@ -17,19 +22,36 @@ const posts = [
 ];
 
 export default function HomeScreen() {
+  const [liked, setLiked] = useState(false);
+
   return (
     <View style={styles.container}>
-      
+
       {/* Top Bar */}
       <View style={styles.topBar}>
         <Text style={styles.logo}>MyApp</Text>
         <Text style={styles.icon}>💬</Text>
       </View>
 
-      {/* Feed */}
+      {/* Main Feed */}
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
+
+        ListHeaderComponent={() => (
+          <FlatList
+            data={stories}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <View style={styles.storyContainer}>
+                <Image source={{ uri: item.image }} style={styles.storyImage} />
+                <Text style={styles.storyText}>{item.user}</Text>
+              </View>
+            )}
+          />
+        )}
+
         renderItem={({ item }) => (
           <View style={styles.post}>
 
@@ -40,19 +62,20 @@ export default function HomeScreen() {
             </View>
 
             {/* Post Image */}
-            <Image source={{ uri: item.image }} style={styles.postImage} />
+            <TouchableOpacity onPress={() => setLiked(!liked)}>
+              <Image source={{ uri: item.image }} style={styles.postImage} />
+            </TouchableOpacity>
+
+            {/* Like Text */}
+            <Text style={{ paddingLeft: 10 }}>
+              {liked ? "❤️ Liked" : "🤍 Like"}
+            </Text>
 
             {/* Actions */}
             <View style={styles.actions}>
-              <TouchableOpacity>
-                <Text style={styles.actionIcon}>❤️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text style={styles.actionIcon}>💬</Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text style={styles.actionIcon}>📤</Text>
-              </TouchableOpacity>
+              <Text style={styles.actionIcon}>❤️</Text>
+              <Text style={styles.actionIcon}>💬</Text>
+              <Text style={styles.actionIcon}>📤</Text>
             </View>
 
             {/* Caption */}
@@ -90,6 +113,23 @@ const styles = StyleSheet.create({
 
   icon: {
     fontSize: 20
+  },
+
+  storyContainer: {
+    alignItems: 'center',
+    margin: 10
+  },
+
+  storyImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: 'red'
+  },
+
+  storyText: {
+    fontSize: 12
   },
 
   post: {
