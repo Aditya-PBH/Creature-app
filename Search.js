@@ -1,83 +1,138 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Image, TouchableOpacity, FlatList, StyleSheet, Dimensions } from 'react-native';
+// 🔍 Search.js — Search users and posts
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, TextInput, FlatList, Image, TouchableOpacity,
+  StyleSheet, SafeAreaView, ActivityIndicator, Dimensions
+} from 'react-native';
+import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
+import { db } from './firebase';
 
-const W = Dimensions.get('window').width;
-const IMG_SIZE = W / 3 - 2;
-
-const GRID = Array.from({ length: 18 }, (_, i) => ({
-  id: String(i + 1),
-  uri: 'https://picsum.photos/seed/s' + (i + 1) + '/300/300',
-}));
-
-const USERS = [
-  { id: '1', name: 'Rahul Sharma', username: 'rahul_s', avatar: 'https://i.pravatar.cc/60?img=1', followers: '12.4K' },
-  { id: '2', name: 'Priya Kapoor', username: 'priya_k', avatar: 'https://i.pravatar.cc/60?img=2', followers: '8.2K' },
-  { id: '3', name: 'Aman Verma', username: 'aman_v', avatar: 'https://i.pravatar.cc/60?img=3', followers: '5.1K' },
-];
+const { width } = Dimensions.get('window');
+const GRID = (width - 3) / 3;
+const PINK = '#ff3b5c';
 
 export default function SearchScreen() {
-  const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [users, setUsers] = useState([]);
+  const [explorePosts, setExplorePosts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  // Load explore posts on mount
+  useEffect(() => {
+    const fetchExplore = async () => {
+      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(30));
+      const snap = await getDocs(q);
+      setExplorePosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    };
+    fetchExplore();
+  }, []);
+
+  const handleSearch = async () => {
+    if (!searchText.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const results = snap.docs
+        .map(d => d.data())
+        .filter(u =>
+          u.username?.toLowerCase().includes(searchText.toLowerCase()) ||
+          u.name?.toLowerCase().includes(searchText.toLowerCase())
+        );
+      setUsers(results);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
 
   return (
-    <View style={s.bg}>
-      <View style={s.searchBar}>
-        <Text style={{ fontSize: 18, marginRight: 8 }}>🔍</Text>
-        <TextInput
-          style={s.input}
-          placeholder="Search users, posts..."
-          placeholderTextColor="#666"
-          value={query}
-          onChangeText={t => { setQuery(t); setSearching(t.length > 0); }}
-        />
-        {query.length > 0 && (
-          <TouchableOpacity onPress={() => { setQuery(''); setSearching(false); }}>
-            <Text style={{ color: '#ff3b5c', fontSize: 16 }}>✕</Text>
-          </TouchableOpacity>
-        )}
+    <SafeAreaView style={s.safe}>
+      {/* SEARCH BAR */}
+      <View style={s.searchWrap}>
+        <View style={s.searchBar}>
+          <Text style={s.searchIcon}>🔍</Text>
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search karo..."
+            placeholderTextColor="#555"
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          {searchText ? (
+            <TouchableOpacity onPress={() => { setSearchText(''); setSearched(false); setUsers([]); }}>
+              <Text style={s.clearBtn}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
-      {searching ? (
+      {loading && <ActivityIndicator color={PINK} style={{ marginTop: 20 }} />}
+
+      {searched && !loading ? (
+        // SEARCH RESULTS
         <FlatList
-          data={USERS.filter(u => u.username.includes(query) || u.name.toLowerCase().includes(query.toLowerCase()))}
-          keyExtractor={i => i.id}
+          data={users}
+          keyExtractor={(_, i) => i.toString()}
           renderItem={({ item }) => (
-            <TouchableOpacity style={s.userRow}>
-              <Image source={{ uri: item.avatar }} style={s.userAv} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.userName}>{item.name}</Text>
-                <Text style={s.userHandle}>@{item.username} • {item.followers} followers</Text>
+            <TouchableOpacity style={s.userItem}>
+              <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100?u=' + item.uid }} style={s.userAvatar} />
+              <View>
+                <Text style={s.userName}>{item.username}</Text>
+                <Text style={s.userFullName}>{item.name}</Text>
               </View>
-              <TouchableOpacity style={s.followBtn}>
-                <Text style={s.followTxt}>Follow</Text>
-              </TouchableOpacity>
             </TouchableOpacity>
           )}
+          ListEmptyComponent={
+            <View style={s.center}>
+              <Text style={s.emptyText}>Koi nahi mila 😕</Text>
+            </View>
+          }
         />
       ) : (
-        <FlatList
-          data={GRID}
-          keyExtractor={i => i.id}
-          numColumns={3}
-          renderItem={({ item }) => (
-            <TouchableOpacity>
-              <Image source={{ uri: item.uri }} style={{ width: IMG_SIZE, height: IMG_SIZE, margin: 1 }} />
-            </TouchableOpacity>
-          )}
-        />
+        // EXPLORE GRID
+        <>
+          <Text style={s.exploreTitle}>🔥 Explore</Text>
+          <FlatList
+            data={explorePosts}
+            numColumns={3}
+            keyExtractor={i => i.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={s.gridItem}>
+                <Image source={{ uri: item.imageUrl }} style={s.gridImg} />
+              </TouchableOpacity>
+            )}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={s.center}>
+                <Text style={s.emptyText}>Abhi koi post nahi 😔</Text>
+              </View>
+            }
+          />
+        </>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: '#000' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', margin: 12, backgroundColor: '#1e1e1e', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
-  input: { flex: 1, color: '#fff', fontSize: 15 },
-  userRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#111' },
-  userAv: { width: 48, height: 48, borderRadius: 24, marginRight: 12 },
-  userName: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  userHandle: { color: '#888', fontSize: 12, marginTop: 2 },
-  followBtn: { backgroundColor: '#ff3b5c', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6 },
-  followTxt: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  safe: { flex: 1, backgroundColor: '#000' },
+  searchWrap: { padding: 12 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 12, paddingHorizontal: 12, gap: 8 },
+  searchIcon: { fontSize: 16 },
+  searchInput: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 12 },
+  clearBtn: { color: '#888', fontSize: 16 },
+  exploreTitle: { color: '#fff', fontWeight: '700', fontSize: 16, paddingHorizontal: 12, paddingBottom: 8 },
+  gridItem: { width: GRID, height: GRID, marginRight: 1.5, marginBottom: 1.5 },
+  gridImg: { width: '100%', height: '100%', backgroundColor: '#111' },
+  userItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#1a1a1a' },
+  userAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#222' },
+  userName: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  userFullName: { color: '#888', fontSize: 13, marginTop: 2 },
+  center: { padding: 40, alignItems: 'center' },
+  emptyText: { color: '#555', fontSize: 16 },
 });
+    
