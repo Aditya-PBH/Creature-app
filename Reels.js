@@ -1,78 +1,116 @@
-import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Share } from 'react-native';
+// 🎬 Reels.js — Vertical video reels (TikTok style)
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  Dimensions, SafeAreaView, ActivityIndicator
+} from 'react-native';
+import { Video } from 'expo-av';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 
-const W = Dimensions.get('window').width;
-
-const REELS = [
-  { id: '1', username: 'rahul_s', avatar: 'https://i.pravatar.cc/60?img=1', image: 'https://picsum.photos/seed/r1/400/700', caption: 'Travel vibe 🔥 #india #travel', likes: 4821, comments: 312 },
-  { id: '2', username: 'priya_k', avatar: 'https://i.pravatar.cc/60?img=2', image: 'https://picsum.photos/seed/r2/400/700', caption: 'Food lover 😋 #foodie #homecooking', likes: 9234, comments: 541 },
-  { id: '3', username: 'aman_v', avatar: 'https://i.pravatar.cc/60?img=3', image: 'https://picsum.photos/seed/r3/400/700', caption: 'Gym grind 💪 #fitness #gym', likes: 3102, comments: 189 },
-  { id: '4', username: 'sneha_j', avatar: 'https://i.pravatar.cc/60?img=4', image: 'https://picsum.photos/seed/r4/400/700', caption: 'Sunset vibes 🌅 #nature #peace', likes: 7654, comments: 432 },
-];
+const { width, height } = Dimensions.get('window');
+const PINK = '#ff3b5c';
 
 export default function ReelsScreen() {
-  const [liked, setLiked] = useState({});
-  const [following, setFollowing] = useState({});
+  const [reels, setReels] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'reels'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, snap => {
+      setReels(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const ReelItem = ({ item, index }) => {
+    const videoRef = useRef(null);
+    const isActive = index === activeIndex;
+
+    useEffect(() => {
+      if (isActive) videoRef.current?.playAsync();
+      else videoRef.current?.pauseAsync();
+    }, [isActive]);
+
+    return (
+      <View style={s.reel}>
+        <Video
+          ref={videoRef}
+          source={{ uri: item.videoUrl }}
+          style={s.video}
+          resizeMode="cover"
+          isLooping
+          shouldPlay={isActive}
+        />
+        {/* Overlay */}
+        <View style={s.overlay}>
+          <View style={s.rightActions}>
+            <TouchableOpacity style={s.actionBtn}>
+              <Text style={s.actionIcon}>❤️</Text>
+              <Text style={s.actionCount}>{item.likes?.length || 0}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.actionBtn}>
+              <Text style={s.actionIcon}>💬</Text>
+              <Text style={s.actionCount}>{item.comments?.length || 0}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.actionBtn}>
+              <Text style={s.actionIcon}>📤</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={s.bottomInfo}>
+            <Text style={s.reelUsername}>@{item.username || 'user'}</Text>
+            {item.caption ? <Text style={s.reelCaption}>{item.caption}</Text> : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) return (
+    <View style={s.center}><ActivityIndicator color={PINK} size="large" /></View>
+  );
+
+  if (reels.length === 0) return (
+    <View style={s.center}>
+      <Text style={s.emptyIcon}>🎬</Text>
+      <Text style={s.emptyText}>Abhi koi reel nahi!</Text>
+    </View>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <ScrollView pagingEnabled showsVerticalScrollIndicator={false}>
-        {REELS.map(reel => (
-          <View key={reel.id} style={{ width: W, height: W * 1.77 }}>
-            <Image source={{ uri: reel.image }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} resizeMode="cover" />
-
-            <View style={s.reelRight}>
-              <Image source={{ uri: reel.avatar }} style={s.reelAv} />
-              <TouchableOpacity
-                style={s.followBubble}
-                onPress={() => setFollowing(p => ({ ...p, [reel.id]: !p[reel.id] }))}
-              >
-                <Text style={{ color: '#fff', fontSize: 16 }}>{following[reel.id] ? '✓' : '+'}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={s.reelAction} onPress={() => setLiked(p => ({ ...p, [reel.id]: !p[reel.id] }))}>
-                <Text style={{ fontSize: 30 }}>{liked[reel.id] ? '❤️' : '🤍'}</Text>
-                <Text style={s.reelCount}>{(reel.likes + (liked[reel.id] ? 1 : 0)).toLocaleString()}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={s.reelAction}>
-                <Text style={{ fontSize: 30 }}>💬</Text>
-                <Text style={s.reelCount}>{reel.comments}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={s.reelAction} onPress={() => Share.share({ message: 'Creature pe Reel dekh: ' + reel.caption })}>
-                <Text style={{ fontSize: 30 }}>📤</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={s.reelAction}>
-                <Text style={{ fontSize: 30 }}>🎵</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.reelBottom}>
-              <Text style={s.reelUser}>@{reel.username}</Text>
-              <Text style={s.reelCap}>{reel.caption}</Text>
-              <View style={s.musicRow}>
-                <Text style={{ fontSize: 14 }}>🎵</Text>
-                <Text style={s.musicTxt}> Original Audio • {reel.username}</Text>
-              </View>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
+    <SafeAreaView style={s.safe}>
+      <FlatList
+        data={reels}
+        keyExtractor={i => i.id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        snapToInterval={height}
+        decelerationRate="fast"
+        onMomentumScrollEnd={e => {
+          setActiveIndex(Math.round(e.nativeEvent.contentOffset.y / height));
+        }}
+        renderItem={({ item, index }) => <ReelItem item={item} index={index} />}
+      />
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  reelRight: { position: 'absolute', right: 12, bottom: 120, alignItems: 'center' },
-  reelAv: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#fff', marginBottom: 4 },
-  followBubble: { backgroundColor: '#ff3b5c', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  reelAction: { alignItems: 'center', marginBottom: 20 },
-  reelCount: { color: '#fff', fontSize: 12, marginTop: 4, fontWeight: '600' },
-  reelBottom: { position: 'absolute', bottom: 0, left: 0, right: 60, padding: 16, backgroundColor: 'rgba(0,0,0,0.35)' },
-  reelUser: { color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 6 },
-  reelCap: { color: '#eee', fontSize: 13, lineHeight: 18, marginBottom: 8 },
-  musicRow: { flexDirection: 'row', alignItems: 'center' },
-  musicTxt: { color: '#ddd', fontSize: 12 },
+  safe: { flex: 1, backgroundColor: '#000' },
+  center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  emptyIcon: { fontSize: 60 },
+  emptyText: { color: '#fff', fontSize: 18, marginTop: 16 },
+  reel: { width, height, backgroundColor: '#000' },
+  video: { width, height },
+  overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  rightActions: { gap: 24, marginBottom: 20 },
+  actionBtn: { alignItems: 'center' },
+  actionIcon: { fontSize: 30 },
+  actionCount: { color: '#fff', fontSize: 12, marginTop: 4, fontWeight: '600' },
+  bottomInfo: { flex: 1, marginRight: 16 },
+  reelUsername: { color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 6 },
+  reelCaption: { color: '#ddd', fontSize: 13, lineHeight: 18 },
 });
+            
