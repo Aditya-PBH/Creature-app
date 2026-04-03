@@ -1,66 +1,46 @@
-import React from 'react';
-import { Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-
-// Screens import karo
-import HomeScreen from './HomeScreen';
-import Search from './Search';
-import Reels from './Reels';
-import Profile from './Profile';
-import UploadScreen from './UploadScreen';
-import ChatScreen from './ChatScreen';
-
-const Tab = createBottomTabNavigator();
+// 🐾 App.js — Main Entry Point
+// Auth check karo → Login dikhao ya App
+import React, { useState, useEffect } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import AuthScreen from './Auth';
+import Navigation from './Navigation';
 
 export default function App() {
-  return (
-    <NavigationContainer>
-      <Tab.Navigator screenOptions={{ headerShown: false }}>
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-        {/* 🏠 Home */}
-        <Tab.Screen 
-          name="Home" 
-          component={HomeScreen}
-          options={{ tabBarIcon: () => <Text>🏠</Text> }}
-        />
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
 
-        {/* 🔍 Search */}
-        <Tab.Screen 
-          name="Search" 
-          component={Search}
-          options={{ tabBarIcon: () => <Text>🔍</Text> }}
-        />
+  if (loading) {
+    return (
+      <View style={s.loading}>
+        <Text style={s.logo}>🐾</Text>
+        <ActivityIndicator color="#ff3b5c" size="large" style={{ marginTop: 24 }} />
+      </View>
+    );
+  }
 
-        {/* ➕ Upload */}
-        <Tab.Screen 
-          name="Add" 
-          component={UploadScreen}
-          options={{ tabBarIcon: () => <Text>➕</Text> }}
-        />
+  // Not logged in → Auth Screen
+  if (!user) return <AuthScreen />;
 
-        {/* 🎥 Reels */}
-        <Tab.Screen 
-          name="Reels" 
-          component={Reels}
-          options={{ tabBarIcon: () => <Text>🎥</Text> }}
-        />
+  // Logged in → Main App with Navigation
+  return <Navigation user={user} />;
+}
 
-        {/* 👤 Profile */}
-        <Tab.Screen 
-          name="Profile" 
-          component={Profile}
-          options={{ tabBarIcon: () => <Text>👤</Text> }}
-        />
-
-        {/* 💬 Chat (hidden) */}
-        <Tab.Screen 
-          name="Chat" 
-          component={ChatScreen}
-          options={{ tabBarButton: () => null }}
-        />
-
-      </Tab.Navigator>
-    </NavigationContainer>
-  );
-                   }
+const s = StyleSheet.create({
+  loading: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: { fontSize: 80 },
+});
