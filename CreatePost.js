@@ -1,99 +1,173 @@
+// ➕ CreatePost.js — Photo upload with caption
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, StyleSheet, Dimensions, Alert } from 'react-native';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Image, Alert, ActivityIndicator, SafeAreaView, ScrollView
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage, auth } from './firebase';
 
-const W = Dimensions.get('window').width;
-
-const SAMPLE_IMGS = [
-  'https://picsum.photos/seed/c1/400/400',
-  'https://picsum.photos/seed/c2/400/400',
-  'https://picsum.photos/seed/c3/400/400',
-  'https://picsum.photos/seed/c4/400/400',
-  'https://picsum.photos/seed/c5/400/400',
-  'https://picsum.photos/seed/c6/400/400',
-];
+const PINK = '#ff3b5c';
 
 export default function CreatePostScreen({ onDone }) {
-  const [selected, setSelected] = useState(SAMPLE_IMGS[0]);
+  const [image, setImage] = useState(null);
   const [caption, setCaption] = useState('');
-  const [type, setType] = useState('post');
+  const [location, setLocation] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleShare = () => {
-    if (!caption.trim()) {
-      Alert.alert('Ruko!', 'Caption likho pehle!');
-      return;
+  const pickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return Alert.alert('Permission chahiye!', 'Gallery access do.');
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+    });
+    if (!result.canceled) setImage(result.assets[0].uri);
+  };
+
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return Alert.alert('Permission chahiye!', 'Camera access do.');
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+    });
+    if (!result.canceled) setImage(result.assets[0].uri);
+  };
+
+  const uploadPost = async () => {
+    if (!image) return Alert.alert('❌', 'Pehle photo select karo!');
+    setLoading(true);
+    try {
+      // Upload image to Firebase Storage
+      const response = await fetch(image);
+      const blob = await response.blob();
+      const filename = `posts/${auth.currentUser.uid}/${Date.now()}.jpg`;
+      const storageRef = ref(storage, filename);
+      await uploadBytes(storageRef, blob);
+      const imageUrl = await getDownloadURL(storageRef);
+
+      // Save post to Firestore
+      await addDoc(collection(db, 'posts'), {
+        uid: auth.currentUser.uid,
+        username: auth.currentUser.displayName || 'User',
+        avatar: auth.currentUser.photoURL || '',
+        imageUrl,
+        caption: caption.trim(),
+        location: location.trim(),
+        likes: [],
+        comments: [],
+        createdAt: serverTimestamp(),
+      });
+
+      Alert.alert('✅', 'Post ho gaya!');
+      setImage(null); setCaption(''); setLocation('');
+      onDone?.();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('❌ Error', 'Post upload nahi hua. Try again!');
     }
-    Alert.alert('Posted! 🎉', 'Tera post share ho gaya!', [
-      { text: 'OK', onPress: onDone }
-    ]);
+    setLoading(false);
   };
 
   return (
-    <ScrollView style={s.bg} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={s.safe}>
       <View style={s.header}>
         <TouchableOpacity onPress={onDone}>
-          <Text style={{ color: '#ff3b5c', fontSize: 16 }}>Cancel</Text>
+          <Text style={s.cancel}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={s.headerTxt}>New Post</Text>
-        <TouchableOpacity onPress={handleShare}>
-          <Text style={{ color: '#ff3b5c', fontSize: 16, fontWeight: '700' }}>Share</Text>
+        <Text style={s.title}>Naya Post</Text>
+        <TouchableOpacity onPress={uploadPost} disabled={loading || !image}>
+          <Text style={[s.share, (!image || loading) && s.shareDisabled]}>Share</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={s.typeRow}>
-        {['post', 'reel', 'story'].map(t => (
-          <TouchableOpacity key={t} style={[s.typeBtn, type === t && s.typeBtnActive]} onPress={() => setType(t)}>
-            <Text style={[s.typeTxt, type === t && s.typeTxtActive]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+      <ScrollView>
+        {/* Image Preview */}
+        <TouchableOpacity style={s.imagePicker} onPress={pickImage}>
+          {image
+            ? <Image source={{ uri: image }} style={s.preview} />
+            : <View style={s.imagePlaceholder}>
+                <Text style={s.imagePlaceholderIcon}>🖼️</Text>
+                <Text style={s.imagePlaceholderText}>Photo select karo</Text>
+              </View>
+          }
+        </TouchableOpacity>
+
+        {/* Buttons */}
+        <View style={s.btnRow}>
+          <TouchableOpacity style={s.pickBtn} onPress={pickImage}>
+            <Text style={s.pickBtnText}>📁 Gallery</Text>
           </TouchableOpacity>
-        ))}
-      </View>
+          <TouchableOpacity style={s.pickBtn} onPress={takePhoto}>
+            <Text style={s.pickBtnText}>📷 Camera</Text>
+          </TouchableOpacity>
+        </View>
 
-      <Image source={{ uri: selected }} style={{ width: W, height: W }} resizeMode="cover" />
+        {/* Caption */}
+        <View style={s.inputWrap}>
+          <Image
+            source={{ uri: auth.currentUser?.photoURL || 'https://i.pravatar.cc/100' }}
+            style={s.userAvatar}
+          />
+          <TextInput
+            style={s.captionInput}
+            placeholder="Caption likho..."
+            placeholderTextColor="#555"
+            value={caption}
+            onChangeText={setCaption}
+            multiline
+            maxLength={500}
+          />
+        </View>
 
-      <View style={s.captionRow}>
-        <Image source={{ uri: 'https://i.pravatar.cc/40?img=10' }} style={s.smallAv} />
+        {/* Location */}
         <TextInput
-          style={s.captionInput}
-          placeholder="Write a caption..."
-          placeholderTextColor="#666"
-          value={caption}
-          onChangeText={setCaption}
-          multiline
-          maxLength={300}
+          style={s.locationInput}
+          placeholder="📍 Location add karo (optional)"
+          placeholderTextColor="#555"
+          value={location}
+          onChangeText={setLocation}
         />
-      </View>
 
-      <Text style={s.galleryLabel}>Choose from gallery</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 8 }}>
-        {SAMPLE_IMGS.map(img => (
-          <TouchableOpacity key={img} onPress={() => setSelected(img)} style={{ marginRight: 4 }}>
-            <Image
-              source={{ uri: img }}
-              style={{ width: 80, height: 80, borderRadius: 8, borderWidth: selected === img ? 3 : 0, borderColor: '#ff3b5c' }}
-            />
-          </TouchableOpacity>
-        ))}
+        {/* Upload Button */}
+        <TouchableOpacity
+          style={[s.uploadBtn, (!image || loading) && s.uploadDisabled]}
+          onPress={uploadPost}
+          disabled={!image || loading}
+        >
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.uploadText}>🚀 Post Karo</Text>
+          }
+        </TouchableOpacity>
       </ScrollView>
-
-      <TouchableOpacity style={s.shareBtn} onPress={handleShare}>
-        <Text style={s.shareBtnTxt}>Share Now 🚀</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
-  headerTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  typeRow: { flexDirection: 'row', padding: 12 },
-  typeBtn: { marginRight: 10, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1e1e1e', borderWidth: 1, borderColor: '#333' },
-  typeBtnActive: { backgroundColor: '#ff3b5c', borderColor: '#ff3b5c' },
-  typeTxt: { color: '#888', fontWeight: '600' },
-  typeTxtActive: { color: '#fff' },
-  captionRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 14, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
-  smallAv: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
-  captionInput: { flex: 1, color: '#fff', fontSize: 15, minHeight: 60 },
-  galleryLabel: { color: '#888', fontSize: 13, padding: 12 },
-  shareBtn: { margin: 16, backgroundColor: '#ff3b5c', borderRadius: 14, padding: 16, alignItems: 'center' },
-  shareBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  safe: { flex: 1, backgroundColor: '#000' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#222' },
+  title: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  cancel: { color: '#aaa', fontSize: 15 },
+  share: { color: PINK, fontSize: 15, fontWeight: '700' },
+  shareDisabled: { color: '#444' },
+  imagePicker: { width: '100%', aspectRatio: 1, backgroundColor: '#111' },
+  preview: { width: '100%', height: '100%' },
+  imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  imagePlaceholderIcon: { fontSize: 60 },
+  imagePlaceholderText: { color: '#555', fontSize: 16, marginTop: 12 },
+  btnRow: { flexDirection: 'row', gap: 12, padding: 16 },
+  pickBtn: { flex: 1, backgroundColor: '#111', borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  pickBtnText: { color: '#fff', fontWeight: '600' },
+  inputWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 16, paddingVertical: 8 },
+  userAvatar: { width: 36, height: 36, borderRadius: 18, marginTop: 4 },
+  captionInput: { flex: 1, color: '#fff', fontSize: 15, minHeight: 80, lineHeight: 22 },
+  locationInput: { borderTopWidth: 0.5, borderTopColor: '#222', borderBottomWidth: 0.5, borderBottomColor: '#222', paddingHorizontal: 16, paddingVertical: 14, color: '#fff', fontSize: 15 },
+  uploadBtn: { margin: 16, backgroundColor: PINK, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  uploadDisabled: { backgroundColor: '#333' },
+  uploadText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
+    
