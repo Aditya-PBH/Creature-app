@@ -21,23 +21,28 @@ const posts = [
   }
 ];
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const [liked, setLiked] = useState(false);
 
   return (
     <View style={styles.container}>
 
-      {/* Top Bar */}
+      {/* 🔝 Top Bar */}
       <View style={styles.topBar}>
         <Text style={styles.logo}>MyApp</Text>
-        <Text style={styles.icon}>💬</Text>
+
+        {/* 💬 Chat Button */}
+        <TouchableOpacity onPress={() => navigation.navigate('Chat')}>
+          <Text style={styles.icon}>💬</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Main Feed */}
+      {/* 📱 Feed */}
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
 
+        {/* 🔥 Stories (Top Scroll) */}
         ListHeaderComponent={() => (
           <FlatList
             data={stories}
@@ -55,30 +60,30 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <View style={styles.post}>
 
-            {/* Header */}
+            {/* 👤 Header */}
             <View style={styles.header}>
               <Image source={{ uri: item.profile }} style={styles.profilePic} />
               <Text style={styles.username}>{item.user}</Text>
             </View>
 
-            {/* Post Image */}
+            {/* 📸 Image */}
             <TouchableOpacity onPress={() => setLiked(!liked)}>
               <Image source={{ uri: item.image }} style={styles.postImage} />
             </TouchableOpacity>
 
-            {/* Like Text */}
+            {/* ❤️ Like */}
             <Text style={{ paddingLeft: 10 }}>
               {liked ? "❤️ Liked" : "🤍 Like"}
             </Text>
 
-            {/* Actions */}
+            {/* 🔘 Actions */}
             <View style={styles.actions}>
               <Text style={styles.actionIcon}>❤️</Text>
               <Text style={styles.actionIcon}>💬</Text>
               <Text style={styles.actionIcon}>📤</Text>
             </View>
 
-            {/* Caption */}
+            {/* 📝 Caption */}
             <Text style={styles.caption}>
               <Text style={{ fontWeight: 'bold' }}>{item.user} </Text>
               This is a sample caption...
@@ -112,7 +117,7 @@ const styles = StyleSheet.create({
   },
 
   icon: {
-    fontSize: 20
+    fontSize: 22
   },
 
   storyContainer: {
