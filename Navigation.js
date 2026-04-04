@@ -90,4 +90,3 @@ const styles = StyleSheet.create({
   },
   createIcon: { color: '#fff', fontSize: 24, fontWeight: '300', lineHeight: 28 },
 });
-          
