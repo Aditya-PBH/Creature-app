@@ -1,4 +1,4 @@
-# 🐾 Creature App — Expo Go + APK Guide
+# 🐾 Creature App 
 
 ---
 
