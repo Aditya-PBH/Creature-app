@@ -256,4 +256,5 @@ const styles = StyleSheet.create({
   switchText: { color: '#666', fontSize: 14 },
   switchLink: { color: PURPLE, fontWeight: '700' },
 });
-    
+
+                  
