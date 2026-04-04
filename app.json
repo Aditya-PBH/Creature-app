@@ -5,9 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "sdkVersion": "50.0.0",
     "android": {
       "package": "com.creature.app",
-      "versionCode": 9
+      "versionCode": 10,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "minSdkVersion": 21
     },
     "extra": {
       "eas": {
