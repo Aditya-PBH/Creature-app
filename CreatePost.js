@@ -170,4 +170,5 @@ const s = StyleSheet.create({
   uploadDisabled: { backgroundColor: '#333' },
   uploadText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
+
     
