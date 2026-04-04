@@ -10,8 +10,7 @@ const firebaseConfig = {
   projectId: "creature-62507",
   storageBucket: "creature-62507.firebasestorage.app",
   messagingSenderId: "746633251563",
-  appId: "1:746633251563:web:53cde0d618efc09e538cae",
-  measurementId: "G-VKZCYWH4VF"
+  appId: "1:746633251563:web:53cde0d618efc09e538cae"
 };
 
 const app = initializeApp(firebaseConfig);
