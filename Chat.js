@@ -416,3 +416,4 @@ const rs = StyleSheet.create({
   sendDisabled: { backgroundColor: '#3a3a4a' },
   sendIcon: { color: '#fff', fontSize: 18, marginLeft: 2 },
 });
+            
