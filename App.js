@@ -1,5 +1,3 @@
-// 🐾 App.js — Main Entry Point
-// Auth check karo → Login dikhao ya App
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -21,26 +19,28 @@ export default function App() {
 
   if (loading) {
     return (
-      <View style={s.loading}>
-        <Text style={s.logo}>🐾</Text>
-        <ActivityIndicator color="#ff3b5c" size="large" style={{ marginTop: 24 }} />
+      <View style={styles.loading}>
+        <Text style={styles.logo}>🐾</Text>
+        <ActivityIndicator color="#8B5CF6" size="large" style={{ marginTop: 24 }} />
       </View>
     );
   }
 
-  // Not logged in → Auth Screen
-  if (!user) return <AuthScreen />;
+  if (!user) {
+    return <AuthScreen />;
+  }
 
-  // Logged in → Main App with Navigation
   return <Navigation user={user} />;
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   loading: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0A0A0F',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: { fontSize: 80 },
+  logo: {
+    fontSize: 80,
+  },
 });
