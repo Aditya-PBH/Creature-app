@@ -1,53 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  Modal,
-  SafeAreaView,
-  RefreshControl,
-  ScrollView,
-  ActivityIndicator,
-  StatusBar,
-  Dimensions
+  View, Text, FlatList, Image, TouchableOpacity,
+  StyleSheet, TextInput, Modal, ScrollView,
+  ActivityIndicator, StatusBar, Dimensions, RefreshControl
 } from 'react-native';
 import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove
+  collection, query, orderBy, onSnapshot,
+  doc, updateDoc, arrayUnion, arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
-var screenWidth = Dimensions.get('window').width;
-var PURPLE = '#8B5CF6';
-var DARK = '#0A0A0F';
-var CARD = '#13131A';
-var BORDER = '#1E1E2E';
+var W = Dimensions.get('window').width;
 
-function getTimeAgo(date) {
-  if (!date) {
-    return 'Just now';
-  }
-  var seconds = Math.floor((new Date() - date) / 1000);
-  if (seconds < 60) {
-    return 'Just now';
-  }
-  if (seconds < 3600) {
-    return Math.floor(seconds / 60) + 'm ago';
-  }
-  if (seconds < 86400) {
-    return Math.floor(seconds / 3600) + 'h ago';
-  }
-  return Math.floor(seconds / 86400) + 'd ago';
+function timeAgo(date) {
+  if (!date) return 'now';
+  var s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60) return 'now';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
 }
 
 export default function HomeScreen() {
@@ -55,416 +26,273 @@ export default function HomeScreen() {
   var [stories, setStories] = useState([]);
   var [loading, setLoading] = useState(true);
   var [refreshing, setRefreshing] = useState(false);
-  var [commentModal, setCommentModal] = useState(false);
+  var [showComments, setShowComments] = useState(false);
   var [activePost, setActivePost] = useState(null);
-  var [comment, setComment] = useState('');
-  var [storyModal, setStoryModal] = useState(false);
+  var [newComment, setNewComment] = useState('');
+  var [showStory, setShowStory] = useState(false);
   var [activeStory, setActiveStory] = useState(null);
-
-  var currentUser = auth.currentUser;
-  var uid = currentUser ? currentUser.uid : null;
+  var uid = auth.currentUser ? auth.currentUser.uid : '';
 
   useEffect(function() {
     var q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    var unsubscribe = onSnapshot(q, function(snap) {
-      var result = [];
-      snap.docs.forEach(function(d) {
-        var data = d.data();
-        data.id = d.id;
-        result.push(data);
-      });
-      setPosts(result);
+    return onSnapshot(q, function(snap) {
+      var list = snap.docs.map(function(d) { var x = d.data(); x.id = d.id; return x; });
+      setPosts(list);
       setLoading(false);
     });
-    return unsubscribe;
   }, []);
 
   useEffect(function() {
     var q = query(collection(db, 'stories'), orderBy('createdAt', 'desc'));
-    var unsubscribe = onSnapshot(q, function(snap) {
-      var result = [];
-      snap.docs.forEach(function(d) {
-        var data = d.data();
-        data.id = d.id;
-        result.push(data);
-      });
-      setStories(result);
+    return onSnapshot(q, function(snap) {
+      var list = snap.docs.map(function(d) { var x = d.data(); x.id = d.id; return x; });
+      setStories(list);
     });
-    return unsubscribe;
   }, []);
 
-  function handleLike(post) {
+  function doLike(post) {
+    var liked = Array.isArray(post.likes) && post.likes.indexOf(uid) !== -1;
     var ref = doc(db, 'posts', post.id);
-    var liked = post.likes && post.likes.indexOf(uid) !== -1;
-    if (liked) {
-      updateDoc(ref, { likes: arrayRemove(uid) });
-    } else {
-      updateDoc(ref, { likes: arrayUnion(uid) });
-    }
+    updateDoc(ref, { likes: liked ? arrayRemove(uid) : arrayUnion(uid) });
   }
 
-  function handleComment() {
-    if (!comment.trim()) {
-      return;
-    }
+  function doComment() {
+    if (!newComment.trim()) return;
     var ref = doc(db, 'posts', activePost.id);
-    var newComment = {
-      uid: uid,
-      username: currentUser ? (currentUser.displayName || 'User') : 'User',
-      text: comment.trim(),
-      createdAt: new Date().toISOString()
-    };
-    updateDoc(ref, { comments: arrayUnion(newComment) });
-    setComment('');
-  }
-
-  var onRefresh = useCallback(function() {
-    setRefreshing(true);
-    setTimeout(function() {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
-
-  function openStory(story) {
-    setActiveStory(story);
-    setStoryModal(true);
-  }
-
-  function openComments(post) {
-    setActivePost(post);
-    setCommentModal(true);
+    updateDoc(ref, {
+      comments: arrayUnion({
+        uid: uid,
+        username: auth.currentUser ? (auth.currentUser.displayName || 'User') : 'User',
+        text: newComment.trim(),
+        createdAt: new Date().toISOString()
+      })
+    });
+    setNewComment('');
   }
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={PURPLE} size="large" />
-      </View>
-    );
+    return <View style={s.center}><ActivityIndicator color="#8B5CF6" size="large" /></View>;
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK} />
+    <View style={s.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      <View style={styles.header}>
-        <Text style={styles.headerLogo}>Creature</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerBtn}>
-            <Text style={styles.headerBtnTxt}>♡</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
-            <Text style={styles.headerBtnTxt}>✉</Text>
-          </TouchableOpacity>
+      <View style={s.header}>
+        <Text style={s.logo}>Creature</Text>
+        <View style={s.hRight}>
+          <TouchableOpacity style={s.hBtn}><Text style={s.hIco}>🔔</Text></TouchableOpacity>
+          <TouchableOpacity style={s.hBtn}><Text style={s.hIco}>✉️</Text></TouchableOpacity>
         </View>
       </View>
 
       <FlatList
         data={posts}
-        keyExtractor={function(item) { return item.id; }}
+        keyExtractor={function(i) { return i.id; }}
         showsVerticalScrollIndicator={false}
-        style={{ backgroundColor: DARK }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={PURPLE}
-          />
-        }
+        style={{ backgroundColor: '#F8F4FF' }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={function() { setRefreshing(true); setTimeout(function() { setRefreshing(false); }, 1000); }} tintColor="#8B5CF6" />}
         ListHeaderComponent={function() {
           return (
-            <View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.storiesRow}
-              >
-                <TouchableOpacity style={styles.storyItem}>
-                  <View style={styles.storyRing}>
-                    <View style={styles.storyRingInner}>
-                      <Image
-                        source={{ uri: currentUser && currentUser.photoURL ? currentUser.photoURL : 'https://i.pravatar.cc/100' }}
-                        style={styles.storyImg}
-                      />
-                    </View>
+            <View style={s.storiesWrap}>
+              <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
+                <TouchableOpacity style={s.storyItem}>
+                  <View style={s.myStoryRing}>
+                    <Image source={{ uri: auth.currentUser ? (auth.currentUser.photoURL || 'https://i.pravatar.cc/100?u=me') : 'https://i.pravatar.cc/100?u=me' }} style={s.storyAv} />
+                    <View style={s.addDot}><Text style={s.addDotTxt}>+</Text></View>
                   </View>
-                  <Text style={styles.storyName}>Your Story</Text>
+                  <Text style={s.storyName}>Your Story</Text>
                 </TouchableOpacity>
                 {stories.map(function(st) {
                   return (
-                    <TouchableOpacity
-                      key={st.id}
-                      style={styles.storyItem}
-                      onPress={function() { openStory(st); }}
-                    >
-                      <View style={styles.storyRing}>
-                        <View style={styles.storyRingInner}>
-                          <Image
-                            source={{ uri: st.avatar ? st.avatar : 'https://i.pravatar.cc/100' }}
-                            style={styles.storyImg}
-                          />
-                        </View>
+                    <TouchableOpacity key={st.id} style={s.storyItem} onPress={function() { setActiveStory(st); setShowStory(true); }}>
+                      <View style={s.storyRing}>
+                        <Image source={{ uri: st.avatar || 'https://i.pravatar.cc/100' }} style={s.storyAv} />
                       </View>
-                      <Text style={styles.storyName} numberOfLines={1}>
-                        {st.username}
-                      </Text>
+                      <Text style={s.storyName} numberOfLines={1}>{st.username}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
-              <View style={styles.divider} />
             </View>
           );
         }}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyIcon}>📸</Text>
-            <Text style={styles.emptyTitle}>No posts yet</Text>
-            <Text style={styles.emptySub}>Be the first to share!</Text>
+          <View style={s.empty}>
+            <Text style={s.emptyIco}>📸</Text>
+            <Text style={s.emptyTxt}>No posts yet!</Text>
+            <Text style={s.emptySub}>Be first to share a moment</Text>
           </View>
         }
         renderItem={function(info) {
           var item = info.item;
-          var liked = item.likes && item.likes.indexOf(uid) !== -1;
-          var likeCount = item.likes ? item.likes.length : 0;
-          var commentCount = item.comments ? item.comments.length : 0;
-
+          var liked = Array.isArray(item.likes) && item.likes.indexOf(uid) !== -1;
+          var likes = Array.isArray(item.likes) ? item.likes.length : 0;
+          var cmts = Array.isArray(item.comments) ? item.comments.length : 0;
+          var t = item.createdAt && item.createdAt.toDate ? timeAgo(item.createdAt.toDate()) : '';
           return (
-            <View style={styles.postCard}>
-              <View style={styles.postTop}>
-                <View style={styles.postUserRow}>
-                  <View style={styles.postAvatarWrap}>
-                    <Image
-                      source={{ uri: item.avatar ? item.avatar : 'https://i.pravatar.cc/100' }}
-                      style={styles.postAvatarImg}
-                    />
-                  </View>
+            <View style={s.card}>
+              <View style={s.cardTop}>
+                <View style={s.cardUser}>
+                  <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }} style={s.cardAv} />
                   <View>
-                    <Text style={styles.postUser}>{item.username ? item.username : 'User'}</Text>
-                    {item.location ? (
-                      <Text style={styles.postLoc}>{'📍 ' + item.location}</Text>
-                    ) : null}
+                    <Text style={s.cardName}>{item.username || 'User'}</Text>
+                    {item.location ? <Text style={s.cardLoc}>{'📍 ' + item.location}</Text> : null}
                   </View>
                 </View>
-                <TouchableOpacity>
-                  <Text style={styles.postMore}>•••</Text>
-                </TouchableOpacity>
+                <TouchableOpacity><Text style={s.dots}>•••</Text></TouchableOpacity>
               </View>
 
-              <Image
-                source={{ uri: item.imageUrl }}
-                style={styles.postImage}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: item.imageUrl }} style={s.cardImg} resizeMode="cover" />
 
-              <View style={styles.postActions}>
-                <View style={styles.postActLeft}>
-                  <TouchableOpacity
-                    onPress={function() { handleLike(item); }}
-                    style={styles.actBtn}
-                  >
-                    <Text style={styles.actIcon}>{liked ? '❤️' : '🤍'}</Text>
+              <View style={s.cardActions}>
+                <View style={s.actLeft}>
+                  <TouchableOpacity style={s.actBtn} onPress={function() { doLike(item); }}>
+                    <Text style={s.actIco}>{liked ? '❤️' : '🤍'}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={function() { openComments(item); }}
-                    style={styles.actBtn}
-                  >
-                    <Text style={styles.actIcon}>💬</Text>
+                  <TouchableOpacity style={s.actBtn} onPress={function() { setActivePost(item); setShowComments(true); }}>
+                    <Text style={s.actIco}>💬</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.actBtn}>
-                    <Text style={styles.actIcon}>✈️</Text>
+                  <TouchableOpacity style={s.actBtn}>
+                    <Text style={s.actIco}>📤</Text>
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity>
-                  <Text style={styles.actIcon}>🔖</Text>
-                </TouchableOpacity>
+                <TouchableOpacity><Text style={s.actIco}>🔖</Text></TouchableOpacity>
               </View>
 
-              {likeCount > 0 ? (
-                <Text style={styles.likeCount}>{likeCount + ' likes'}</Text>
-              ) : null}
-
+              {likes > 0 ? <Text style={s.likeTxt}>{likes + ' likes'}</Text> : null}
               {item.caption ? (
-                <Text style={styles.caption}>
-                  <Text style={styles.captionUser}>
-                    {(item.username ? item.username : 'User') + ' '}
-                  </Text>
+                <Text style={s.caption}>
+                  <Text style={s.capUser}>{(item.username || 'User') + ' '}</Text>
                   {item.caption}
                 </Text>
               ) : null}
-
-              {commentCount > 0 ? (
-                <TouchableOpacity onPress={function() { openComments(item); }}>
-                  <Text style={styles.viewComments}>
-                    {'View all ' + commentCount + ' comments'}
-                  </Text>
+              {cmts > 0 ? (
+                <TouchableOpacity onPress={function() { setActivePost(item); setShowComments(true); }}>
+                  <Text style={s.viewCmts}>{'View all ' + cmts + ' comments'}</Text>
                 </TouchableOpacity>
               ) : null}
-
-              <Text style={styles.postTime}>
-                {getTimeAgo(item.createdAt && item.createdAt.toDate ? item.createdAt.toDate() : null)}
-              </Text>
+              {t ? <Text style={s.timeAgo}>{t}</Text> : null}
             </View>
           );
         }}
       />
 
-      <Modal
-        visible={commentModal}
-        animationType="slide"
-        onRequestClose={function() { setCommentModal(false); }}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHandle} />
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Comments</Text>
-            <TouchableOpacity onPress={function() { setCommentModal(false); }}>
-              <Text style={styles.modalClose}>✕</Text>
+      <Modal visible={showComments} animationType="slide" onRequestClose={function() { setShowComments(false); }}>
+        <View style={s.modal}>
+          <View style={s.modalHandle} />
+          <View style={s.modalTop}>
+            <Text style={s.modalTitle}>Comments</Text>
+            <TouchableOpacity onPress={function() { setShowComments(false); }}>
+              <Text style={s.modalClose}>✕</Text>
             </TouchableOpacity>
           </View>
-
           <FlatList
             data={activePost ? (activePost.comments || []) : []}
-            keyExtractor={function(item, index) { return String(index); }}
-            ListEmptyComponent={
-              <Text style={styles.noComments}>No comments yet!</Text>
-            }
+            keyExtractor={function(x, i) { return String(i); }}
+            ListEmptyComponent={<Text style={s.noCmt}>No comments yet!</Text>}
             renderItem={function(info) {
-              var item = info.item;
+              var c = info.item;
               return (
-                <View style={styles.commentRow}>
-                  <View style={styles.commentAvatar}>
-                    <Text style={styles.commentAvatarTxt}>
-                      {item.username ? item.username[0].toUpperCase() : 'U'}
-                    </Text>
-                  </View>
-                  <View style={styles.commentRight}>
-                    <Text style={styles.commentUser}>{item.username}</Text>
-                    <Text style={styles.commentTxt}>{item.text}</Text>
+                <View style={s.cmtRow}>
+                  <View style={s.cmtAv}><Text style={s.cmtAvTxt}>{c.username ? c.username[0].toUpperCase() : 'U'}</Text></View>
+                  <View style={s.cmtBody}>
+                    <Text style={s.cmtUser}>{c.username}</Text>
+                    <Text style={s.cmtTxt}>{c.text}</Text>
                   </View>
                 </View>
               );
             }}
           />
-
-          <View style={styles.commentInputRow}>
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Add a comment..."
-              placeholderTextColor="#555"
-              value={comment}
-              onChangeText={setComment}
-              multiline
-            />
-            <TouchableOpacity
-              onPress={handleComment}
-              disabled={!comment.trim()}
-              style={comment.trim() ? styles.sendBtn : styles.sendBtnOff}
-            >
-              <Text style={styles.sendBtnTxt}>Post</Text>
+          <View style={s.cmtInput}>
+            <TextInput style={s.cmtBox} placeholder="Add a comment..." placeholderTextColor="#aaa" value={newComment} onChangeText={setNewComment} multiline={true} />
+            <TouchableOpacity style={newComment.trim() ? s.postBtn : s.postBtnOff} onPress={doComment} disabled={!newComment.trim()}>
+              <Text style={s.postBtnTxt}>Post</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      <Modal
-        visible={storyModal}
-        animationType="fade"
-        onRequestClose={function() { setStoryModal(false); }}
-      >
-        <View style={styles.storyViewer}>
-          <View style={styles.storyViewerBar} />
+      <Modal visible={showStory} animationType="fade" onRequestClose={function() { setShowStory(false); }}>
+        <View style={s.storyView}>
+          <TouchableOpacity style={s.storyClose} onPress={function() { setShowStory(false); }}>
+            <Text style={s.storyCloseTxt}>✕</Text>
+          </TouchableOpacity>
           {activeStory ? (
             <View>
-              <View style={styles.storyViewerTop}>
-                <Image
-                  source={{ uri: activeStory.avatar ? activeStory.avatar : 'https://i.pravatar.cc/100' }}
-                  style={styles.storyViewerAvatar}
-                />
-                <Text style={styles.storyViewerName}>{activeStory.username}</Text>
+              <View style={s.storyViewTop}>
+                <Image source={{ uri: activeStory.avatar || 'https://i.pravatar.cc/100' }} style={s.storyViewAv} />
+                <Text style={s.storyViewName}>{activeStory.username}</Text>
               </View>
-              {activeStory.imageUrl ? (
-                <Image
-                  source={{ uri: activeStory.imageUrl }}
-                  style={styles.storyViewerImage}
-                  resizeMode="cover"
-                />
-              ) : null}
+              {activeStory.imageUrl ? <Image source={{ uri: activeStory.imageUrl }} style={s.storyViewImg} resizeMode="cover" /> : null}
             </View>
           ) : null}
-          <TouchableOpacity
-            style={styles.storyCloseBtn}
-            onPress={function() { setStoryModal(false); }}
-          >
-            <Text style={styles.storyCloseTxt}>✕</Text>
-          </TouchableOpacity>
         </View>
       </Modal>
     </View>
   );
 }
 
-var styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DARK },
-  center: { flex: 1, backgroundColor: DARK, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER, backgroundColor: DARK },
-  headerLogo: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  headerRight: { flexDirection: 'row', gap: 12 },
-  headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: CARD, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: BORDER },
-  headerBtnTxt: { color: '#fff', fontSize: 16 },
-  storiesRow: { paddingVertical: 12, paddingHorizontal: 10, backgroundColor: DARK },
-  storyItem: { alignItems: 'center', marginHorizontal: 7, width: 68 },
-  storyRing: { width: 66, height: 66, borderRadius: 33, backgroundColor: PURPLE, padding: 2, marginBottom: 5 },
-  storyRingInner: { flex: 1, borderRadius: 30, borderWidth: 2, borderColor: DARK, overflow: 'hidden' },
-  storyImg: { width: '100%', height: '100%' },
-  storyName: { color: '#aaa', fontSize: 10, textAlign: 'center' },
-  divider: { height: 1, backgroundColor: BORDER },
-  postCard: { backgroundColor: DARK, marginBottom: 2 },
-  postTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
-  postUserRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  postAvatarWrap: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: PURPLE, padding: 1.5, overflow: 'hidden' },
-  postAvatarImg: { width: '100%', height: '100%', borderRadius: 16 },
-  postUser: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  postLoc: { color: '#888', fontSize: 11, marginTop: 1 },
-  postMore: { color: '#888', fontSize: 18 },
-  postImage: { width: screenWidth, height: screenWidth, backgroundColor: CARD },
-  postActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
-  postActLeft: { flexDirection: 'row', gap: 16 },
+var s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#fff' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F4FF' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0EAFF' },
+  logo: { fontSize: 22, fontWeight: '900', color: '#8B5CF6' },
+  hRight: { flexDirection: 'row', gap: 10 },
+  hBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3EEFF', justifyContent: 'center', alignItems: 'center' },
+  hIco: { fontSize: 16 },
+  storiesWrap: { backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#F0EAFF' },
+  storyItem: { alignItems: 'center', marginHorizontal: 7, width: 66 },
+  myStoryRing: { width: 62, height: 62, borderRadius: 31, borderWidth: 2.5, borderColor: '#E0D4FF', justifyContent: 'center', alignItems: 'center', marginBottom: 5, position: 'relative' },
+  storyRing: { width: 62, height: 62, borderRadius: 31, borderWidth: 2.5, borderColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
+  storyAv: { width: 52, height: 52, borderRadius: 26 },
+  addDot: { position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+  addDotTxt: { color: '#fff', fontSize: 12, fontWeight: '700', lineHeight: 16 },
+  storyName: { color: '#555', fontSize: 10, textAlign: 'center' },
+  empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
+  emptyIco: { fontSize: 60 },
+  emptyTxt: { color: '#333', fontSize: 20, fontWeight: '700' },
+  emptySub: { color: '#999', fontSize: 14 },
+  card: { backgroundColor: '#fff', marginBottom: 8, borderRadius: 0 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  cardUser: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardAv: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: '#8B5CF6' },
+  cardName: { color: '#1A1A2E', fontWeight: '700', fontSize: 14 },
+  cardLoc: { color: '#999', fontSize: 11 },
+  dots: { color: '#ccc', fontSize: 18 },
+  cardImg: { width: W, height: W, backgroundColor: '#F0EAFF' },
+  cardActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  actLeft: { flexDirection: 'row', gap: 16 },
   actBtn: {},
-  actIcon: { fontSize: 26 },
-  likeCount: { color: '#fff', fontWeight: '700', fontSize: 13, paddingHorizontal: 14 },
-  caption: { color: '#ddd', fontSize: 13, paddingHorizontal: 14, paddingTop: 3, lineHeight: 20 },
-  captionUser: { color: '#fff', fontWeight: '700' },
-  viewComments: { color: '#777', fontSize: 12, paddingHorizontal: 14, paddingTop: 3 },
-  postTime: { color: '#555', fontSize: 11, paddingHorizontal: 14, paddingTop: 3, paddingBottom: 10 },
-  emptyWrap: { alignItems: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 56 },
-  emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16 },
-  emptySub: { color: '#666', fontSize: 14, marginTop: 6 },
-  modalContainer: { flex: 1, backgroundColor: '#0D0D14' },
-  modalHandle: { width: 36, height: 4, backgroundColor: '#333', borderRadius: 2, alignSelf: 'center', marginTop: 12 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: BORDER },
-  modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  modalClose: { color: '#888', fontSize: 20 },
-  noComments: { color: '#555', textAlign: 'center', padding: 40, fontSize: 15 },
-  commentRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  commentAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: PURPLE, justifyContent: 'center', alignItems: 'center' },
-  commentAvatarTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  commentRight: { flex: 1 },
-  commentUser: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  commentTxt: { color: '#ccc', fontSize: 14, marginTop: 2, lineHeight: 20 },
-  commentInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: BORDER, padding: 12 },
-  commentInput: { flex: 1, backgroundColor: CARD, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, color: '#fff', fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: BORDER },
-  sendBtn: { backgroundColor: PURPLE, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
-  sendBtnOff: { backgroundColor: '#2a2a3a', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
-  sendBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  storyViewer: { flex: 1, backgroundColor: '#000' },
-  storyViewerBar: { position: 'absolute', top: 50, left: 16, right: 16, height: 3, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 2, zIndex: 10 },
-  storyViewerTop: { position: 'absolute', top: 65, left: 16, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 10 },
-  storyViewerAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: PURPLE },
-  storyViewerName: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  storyViewerImage: { width: screenWidth, height: '100%' },
-  storyCloseBtn: { position: 'absolute', top: 50, right: 16, zIndex: 10 },
-  storyCloseTxt: { color: '#fff', fontSize: 22 }
+  actIco: { fontSize: 26 },
+  likeTxt: { color: '#1A1A2E', fontWeight: '700', fontSize: 14, paddingHorizontal: 14 },
+  caption: { color: '#444', fontSize: 14, paddingHorizontal: 14, paddingTop: 3, lineHeight: 20 },
+  capUser: { color: '#1A1A2E', fontWeight: '700' },
+  viewCmts: { color: '#aaa', fontSize: 13, paddingHorizontal: 14, paddingTop: 3 },
+  timeAgo: { color: '#ccc', fontSize: 11, paddingHorizontal: 14, paddingTop: 3, paddingBottom: 12 },
+  modal: { flex: 1, backgroundColor: '#fff' },
+  modalHandle: { width: 36, height: 4, backgroundColor: '#eee', borderRadius: 2, alignSelf: 'center', marginTop: 10 },
+  modalTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F0EAFF' },
+  modalTitle: { color: '#1A1A2E', fontSize: 16, fontWeight: '700' },
+  modalClose: { color: '#aaa', fontSize: 20 },
+  cmtRow: { flexDirection: 'row', gap: 10, padding: 14, borderBottomWidth: 1, borderBottomColor: '#F9F5FF' },
+  cmtAv: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center' },
+  cmtAvTxt: { color: '#fff', fontWeight: '700' },
+  cmtBody: { flex: 1 },
+  cmtUser: { color: '#1A1A2E', fontWeight: '700', fontSize: 13 },
+  cmtTxt: { color: '#555', fontSize: 13, marginTop: 2 },
+  noCmt: { color: '#ccc', textAlign: 'center', padding: 40 },
+  cmtInput: { flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: 1, borderTopColor: '#F0EAFF', gap: 10 },
+  cmtBox: { flex: 1, backgroundColor: '#F8F4FF', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: '#333', fontSize: 14, maxHeight: 80 },
+  postBtn: { backgroundColor: '#8B5CF6', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 8 },
+  postBtnOff: { backgroundColor: '#E0D4FF', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 8 },
+  postBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  storyView: { flex: 1, backgroundColor: '#000' },
+  storyClose: { position: 'absolute', top: 50, right: 16, zIndex: 10 },
+  storyCloseTxt: { color: '#fff', fontSize: 22 },
+  storyViewTop: { position: 'absolute', top: 60, left: 16, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 10 },
+  storyViewAv: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#8B5CF6' },
+  storyViewName: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  storyViewImg: { width: W, height: '100%' }
 });
-  
+        
