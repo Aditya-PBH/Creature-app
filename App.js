@@ -6,11 +6,11 @@ import AuthScreen from './Auth';
 import Navigation from './Navigation';
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  var [user, setUser] = useState(null);
+  var [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+  useEffect(function() {
+    var unsub = onAuthStateChanged(auth, function(u) {
       setUser(u);
       setLoading(false);
     });
@@ -33,15 +33,12 @@ export default function App() {
   return <Navigation user={user} />;
 }
 
-const styles = StyleSheet.create({
+var styles = StyleSheet.create({
   loading: {
     flex: 1,
     backgroundColor: '#0A0A0F',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    fontSize: 80,
-  },
+  logo: { fontSize: 80 }
 });
-
