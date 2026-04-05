@@ -1,138 +1,115 @@
-// 🔍 Search.js — Search users and posts
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, FlatList, Image, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator, Dimensions
+  View, Text, FlatList, TouchableOpacity,
+  StyleSheet, Dimensions, SafeAreaView, ActivityIndicator, Image
 } from 'react-native';
-import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 
-const { width } = Dimensions.get('window');
-const GRID = (width - 3) / 3;
-const PINK = '#ff3b5c';
+var W = Dimensions.get('window').width;
+var H = Dimensions.get('window').height;
 
-export default function SearchScreen() {
-  const [searchText, setSearchText] = useState('');
-  const [users, setUsers] = useState([]);
-  const [explorePosts, setExplorePosts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+export default function ReelsScreen() {
+  var [reels, setReels] = useState([]);
+  var [loading, setLoading] = useState(true);
 
-  // Load explore posts on mount
-  useEffect(() => {
-    const fetchExplore = async () => {
-      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(30));
-      const snap = await getDocs(q);
-      setExplorePosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    };
-    fetchExplore();
+  useEffect(function() {
+    var q = query(collection(db, 'reels'), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, function(snap) {
+      var list = snap.docs.map(function(d) {
+        var data = d.data();
+        data.id = d.id;
+        return data;
+      });
+      setReels(list);
+      setLoading(false);
+    });
   }, []);
 
-  const handleSearch = async () => {
-    if (!searchText.trim()) return;
-    setLoading(true);
-    setSearched(true);
-    try {
-      const snap = await getDocs(collection(db, 'users'));
-      const results = snap.docs
-        .map(d => d.data())
-        .filter(u =>
-          u.username?.toLowerCase().includes(searchText.toLowerCase()) ||
-          u.name?.toLowerCase().includes(searchText.toLowerCase())
-        );
-      setUsers(results);
-    } catch (e) {
-      console.error(e);
-    }
-    setLoading(false);
-  };
+  if (loading) {
+    return (
+      <View style={st.center}>
+        <ActivityIndicator color="#8B5CF6" size="large" />
+      </View>
+    );
+  }
+
+  if (reels.length === 0) {
+    return (
+      <View style={st.center}>
+        <Text style={st.emptyIco}>🎬</Text>
+        <Text style={st.emptyTxt}>No reels yet!</Text>
+        <Text style={st.emptySub}>Upload a video to get started</Text>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={s.safe}>
-      {/* SEARCH BAR */}
-      <View style={s.searchWrap}>
-        <View style={s.searchBar}>
-          <Text style={s.searchIcon}>🔍</Text>
-          <TextInput
-            style={s.searchInput}
-            placeholder="Search karo..."
-            placeholderTextColor="#555"
-            value={searchText}
-            onChangeText={setSearchText}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
-          {searchText ? (
-            <TouchableOpacity onPress={() => { setSearchText(''); setSearched(false); setUsers([]); }}>
-              <Text style={s.clearBtn}>✕</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {loading && <ActivityIndicator color={PINK} style={{ marginTop: 20 }} />}
-
-      {searched && !loading ? (
-        // SEARCH RESULTS
-        <FlatList
-          data={users}
-          keyExtractor={(_, i) => i.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={s.userItem}>
-              <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100?u=' + item.uid }} style={s.userAvatar} />
-              <View>
-                <Text style={s.userName}>{item.username}</Text>
-                <Text style={s.userFullName}>{item.name}</Text>
+    <SafeAreaView style={st.safe}>
+      <FlatList
+        data={reels}
+        keyExtractor={function(item) { return item.id; }}
+        pagingEnabled={true}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={H}
+        decelerationRate="fast"
+        renderItem={function(info) {
+          var item = info.item;
+          var likes = Array.isArray(item.likes) ? item.likes.length : 0;
+          var comments = Array.isArray(item.comments) ? item.comments.length : 0;
+          return (
+            <View style={st.reel}>
+              {item.thumbnailUrl ? (
+                <Image source={{ uri: item.thumbnailUrl }} style={st.reelBg} resizeMode="cover" />
+              ) : (
+                <View style={st.reelBg} />
+              )}
+              <View style={st.overlay}>
+                <View style={st.rightCol}>
+                  <TouchableOpacity style={st.actionItem}>
+                    <Text style={st.actionIco}>❤️</Text>
+                    <Text style={st.actionTxt}>{likes}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={st.actionItem}>
+                    <Text style={st.actionIco}>💬</Text>
+                    <Text style={st.actionTxt}>{comments}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={st.actionItem}>
+                    <Text style={st.actionIco}>📤</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={st.bottomInfo}>
+                  <Text style={st.reelUser}>{'@' + (item.username || 'user')}</Text>
+                  {item.caption ? <Text style={st.reelCaption}>{item.caption}</Text> : null}
+                </View>
               </View>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            <View style={s.center}>
-              <Text style={s.emptyText}>Koi nahi mila 😕</Text>
+              <View style={st.playBtn}>
+                <Text style={st.playIco}>▶</Text>
+              </View>
             </View>
-          }
-        />
-      ) : (
-        // EXPLORE GRID
-        <>
-          <Text style={s.exploreTitle}>🔥 Explore</Text>
-          <FlatList
-            data={explorePosts}
-            numColumns={3}
-            keyExtractor={i => i.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={s.gridItem}>
-                <Image source={{ uri: item.imageUrl }} style={s.gridImg} />
-              </TouchableOpacity>
-            )}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={s.center}>
-                <Text style={s.emptyText}>Abhi koi post nahi 😔</Text>
-              </View>
-            }
-          />
-        </>
-      )}
+          );
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
+var st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#000' },
-  searchWrap: { padding: 12 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 12, paddingHorizontal: 12, gap: 8 },
-  searchIcon: { fontSize: 16 },
-  searchInput: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 12 },
-  clearBtn: { color: '#888', fontSize: 16 },
-  exploreTitle: { color: '#fff', fontWeight: '700', fontSize: 16, paddingHorizontal: 12, paddingBottom: 8 },
-  gridItem: { width: GRID, height: GRID, marginRight: 1.5, marginBottom: 1.5 },
-  gridImg: { width: '100%', height: '100%', backgroundColor: '#111' },
-  userItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#1a1a1a' },
-  userAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#222' },
-  userName: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  userFullName: { color: '#888', fontSize: 13, marginTop: 2 },
-  center: { padding: 40, alignItems: 'center' },
-  emptyText: { color: '#555', fontSize: 16 },
+  center: { flex: 1, backgroundColor: '#0A0A0F', justifyContent: 'center', alignItems: 'center' },
+  emptyIco: { fontSize: 56, marginBottom: 12 },
+  emptyTxt: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  emptySub: { color: '#888', fontSize: 13, marginTop: 6 },
+  reel: { width: W, height: H, backgroundColor: '#000' },
+  reelBg: { width: W, height: H, backgroundColor: '#111' },
+  overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  rightCol: { gap: 20, marginBottom: 20 },
+  actionItem: { alignItems: 'center' },
+  actionIco: { fontSize: 28 },
+  actionTxt: { color: '#fff', fontSize: 12, marginTop: 4, fontWeight: '600' },
+  bottomInfo: { flex: 1, marginRight: 16 },
+  reelUser: { color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 4 },
+  reelCaption: { color: '#ddd', fontSize: 13, lineHeight: 18 },
+  playBtn: { position: 'absolute', top: '45%', left: '45%' },
+  playIco: { color: 'rgba(255,255,255,0.7)', fontSize: 48 }
 });
-    
