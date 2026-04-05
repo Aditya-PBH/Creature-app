@@ -1,271 +1,355 @@
-// 🏠 Home.js — Premium Instagram-style UI (Purple/Pink Gradient Theme)
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, FlatList, Image, TouchableOpacity, StyleSheet,
-  TextInput, Modal, SafeAreaView, RefreshControl, ScrollView,
-  ActivityIndicator, StatusBar, Dimensions
+  View,
+  Text,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  Modal,
+  SafeAreaView,
+  RefreshControl,
+  ScrollView,
+  ActivityIndicator,
+  StatusBar,
+  Dimensions
 } from 'react-native';
 import {
-  collection, query, orderBy, onSnapshot, doc,
-  updateDoc, arrayUnion, arrayRemove, serverTimestamp
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
-const { width } = Dimensions.get('window');
-const GRADIENT_START = '#8B5CF6';
-const GRADIENT_END = '#EC4899';
-const DARK = '#0A0A0F';
-const CARD = '#13131A';
-const BORDER = '#1E1E2E';
+var screenWidth = Dimensions.get('window').width;
+var PURPLE = '#8B5CF6';
+var DARK = '#0A0A0F';
+var CARD = '#13131A';
+var BORDER = '#1E1E2E';
+
+function getTimeAgo(date) {
+  if (!date) {
+    return 'Just now';
+  }
+  var seconds = Math.floor((new Date() - date) / 1000);
+  if (seconds < 60) {
+    return 'Just now';
+  }
+  if (seconds < 3600) {
+    return Math.floor(seconds / 60) + 'm ago';
+  }
+  if (seconds < 86400) {
+    return Math.floor(seconds / 3600) + 'h ago';
+  }
+  return Math.floor(seconds / 86400) + 'd ago';
+}
 
 export default function HomeScreen() {
-  const [posts, setPosts] = useState([]);
-  const [stories, setStories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [commentModal, setCommentModal] = useState(false);
-  const [activePost, setActivePost] = useState(null);
-  const [comment, setComment] = useState('');
-  const [storyModal, setStoryModal] = useState(false);
-  const [activeStory, setActiveStory] = useState(null);
-  const uid = auth.currentUser?.uid;
+  var [posts, setPosts] = useState([]);
+  var [stories, setStories] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [refreshing, setRefreshing] = useState(false);
+  var [commentModal, setCommentModal] = useState(false);
+  var [activePost, setActivePost] = useState(null);
+  var [comment, setComment] = useState('');
+  var [storyModal, setStoryModal] = useState(false);
+  var [activeStory, setActiveStory] = useState(null);
 
-  useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  var currentUser = auth.currentUser;
+  var uid = currentUser ? currentUser.uid : null;
+
+  useEffect(function() {
+    var q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+    var unsubscribe = onSnapshot(q, function(snap) {
+      var result = [];
+      snap.docs.forEach(function(d) {
+        var data = d.data();
+        data.id = d.id;
+        result.push(data);
+      });
+      setPosts(result);
       setLoading(false);
     });
-    return unsub;
+    return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    const q = query(collection(db, 'stories'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setStories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  useEffect(function() {
+    var q = query(collection(db, 'stories'), orderBy('createdAt', 'desc'));
+    var unsubscribe = onSnapshot(q, function(snap) {
+      var result = [];
+      snap.docs.forEach(function(d) {
+        var data = d.data();
+        data.id = d.id;
+        result.push(data);
+      });
+      setStories(result);
     });
-    return unsub;
+    return unsubscribe;
   }, []);
 
-  const toggleLike = async (post) => {
-    const ref = doc(db, 'posts', post.id);
-    const liked = post.likes?.includes(uid);
-    await updateDoc(ref, {
-      likes: liked ? arrayRemove(uid) : arrayUnion(uid)
-    });
-  };
+  function handleLike(post) {
+    var ref = doc(db, 'posts', post.id);
+    var liked = post.likes && post.likes.indexOf(uid) !== -1;
+    if (liked) {
+      updateDoc(ref, { likes: arrayRemove(uid) });
+    } else {
+      updateDoc(ref, { likes: arrayUnion(uid) });
+    }
+  }
 
-  const addComment = async () => {
-    if (!comment.trim()) return;
-    const ref = doc(db, 'posts', activePost.id);
-    await updateDoc(ref, {
-      comments: arrayUnion({
-        uid,
-        username: auth.currentUser?.displayName || 'User',
-        text: comment.trim(),
-        createdAt: new Date().toISOString(),
-      })
-    });
+  function handleComment() {
+    if (!comment.trim()) {
+      return;
+    }
+    var ref = doc(db, 'posts', activePost.id);
+    var newComment = {
+      uid: uid,
+      username: currentUser ? (currentUser.displayName || 'User') : 'User',
+      text: comment.trim(),
+      createdAt: new Date().toISOString()
+    };
+    updateDoc(ref, { comments: arrayUnion(newComment) });
     setComment('');
-  };
+  }
 
-  const onRefresh = useCallback(() => {
+  var onRefresh = useCallback(function() {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    setTimeout(function() {
+      setRefreshing(false);
+    }, 1000);
   }, []);
 
-  // ── Story Ring ──────────────────────────────
-  const StoryItem = ({ item, isFirst }) => (
-    <TouchableOpacity style={s.storyWrap}
-      onPress={() => { setActiveStory(item); setStoryModal(true); }}>
-      <View style={s.storyGradientRing}>
-        <View style={s.storyInnerRing}>
-          <Image
-            source={{ uri: item.avatar || `https://i.pravatar.cc/100?u=${item.uid}` }}
-            style={s.storyAvatar}
-          />
-        </View>
-      </View>
-      <Text style={s.storyName} numberOfLines={1}>
-        {isFirst ? 'Your Story' : item.username}
-      </Text>
-    </TouchableOpacity>
-  );
+  function openStory(story) {
+    setActiveStory(story);
+    setStoryModal(true);
+  }
 
-  // ── Post Card ───────────────────────────────
-  const PostItem = ({ item }) => {
-    const liked = item.likes?.includes(uid);
-    const likeCount = item.likes?.length || 0;
-    const commentCount = item.comments?.length || 0;
+  function openComments(post) {
+    setActivePost(post);
+    setCommentModal(true);
+  }
 
+  if (loading) {
     return (
-      <View style={s.postCard}>
-        {/* Header */}
-        <View style={s.postHeader}>
-          <View style={s.postUserRow}>
-            <View style={s.postAvatarRing}>
-              <Image
-                source={{ uri: item.avatar || `https://i.pravatar.cc/100?u=${item.uid}` }}
-                style={s.postAvatar}
-              />
-            </View>
-            <View>
-              <Text style={s.postUsername}>{item.username || 'User'}</Text>
-              {item.location
-                ? <Text style={s.postLocation}>📍 {item.location}</Text>
-                : null}
-            </View>
-          </View>
-          <TouchableOpacity style={s.moreBtn}>
-            <Text style={s.moreDots}>•••</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Post Image */}
-        <Image source={{ uri: item.imageUrl }} style={s.postImage} resizeMode="cover" />
-
-        {/* Actions Row */}
-        <View style={s.actionsRow}>
-          <View style={s.actionsLeft}>
-            <TouchableOpacity onPress={() => toggleLike(item)} style={s.actionBtn}>
-              <Text style={[s.actionEmoji, liked && s.likedEmoji]}>
-                {liked ? '❤️' : '🤍'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => { setActivePost(item); setCommentModal(true); }}
-              style={s.actionBtn}>
-              <Text style={s.actionEmoji}>💬</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.actionBtn}>
-              <Text style={s.actionEmoji}>✈️</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity>
-            <Text style={s.actionEmoji}>🔖</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Likes */}
-        {likeCount > 0 && (
-          <Text style={s.likeCount}>{likeCount.toLocaleString()} likes</Text>
-        )}
-
-        {/* Caption */}
-        {item.caption ? (
-          <Text style={s.caption}>
-            <Text style={s.captionUsername}>{item.username} </Text>
-            {item.caption}
-          </Text>
-        ) : null}
-
-        {/* View comments */}
-        {commentCount > 0 && (
-          <TouchableOpacity onPress={() => { setActivePost(item); setCommentModal(true); }}>
-            <Text style={s.viewAllComments}>View all {commentCount} comments</Text>
-          </TouchableOpacity>
-        )}
-
-        <Text style={s.postTime}>{timeAgo(item.createdAt?.toDate?.())}</Text>
+      <View style={styles.center}>
+        <ActivityIndicator color={PURPLE} size="large" />
       </View>
     );
-  };
-
-  if (loading) return (
-    <View style={s.loadingWrap}>
-      <ActivityIndicator color={GRADIENT_START} size="large" />
-    </View>
-  );
+  }
 
   return (
-    <View style={s.safe}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={DARK} />
 
-      {/* HEADER */}
-      <View style={s.header}>
-        <Text style={s.headerLogo}>
-          <Text style={s.headerLogoC}>C</Text>reature
-        </Text>
-        <View style={s.headerIcons}>
-          <TouchableOpacity style={s.headerIconBtn}>
-            <Text style={s.headerIconText}>♡</Text>
+      <View style={styles.header}>
+        <Text style={styles.headerLogo}>Creature</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.headerBtn}>
+            <Text style={styles.headerBtnTxt}>♡</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.headerIconBtn}>
-            <Text style={s.headerIconText}>✉</Text>
+          <TouchableOpacity style={styles.headerBtn}>
+            <Text style={styles.headerBtnTxt}>✉</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <FlatList
         data={posts}
-        keyExtractor={i => i.id}
+        keyExtractor={function(item) { return item.id; }}
         showsVerticalScrollIndicator={false}
-        backgroundColor={DARK}
+        style={{ backgroundColor: DARK }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GRADIENT_START} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={PURPLE}
+          />
         }
-        ListHeaderComponent={() => (
-          <>
-            {/* STORIES */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.storiesRow}>
-              <StoryItem
-                item={{ username: 'Your Story', avatar: auth.currentUser?.photoURL, uid: 'me' }}
-                isFirst
-              />
-              {stories.map(st => <StoryItem key={st.id} item={st} />)}
-            </ScrollView>
-            <View style={s.separator} />
-          </>
-        )}
-        renderItem={({ item }) => <PostItem item={item} />}
+        ListHeaderComponent={function() {
+          return (
+            <View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.storiesRow}
+              >
+                <TouchableOpacity style={styles.storyItem}>
+                  <View style={styles.storyRing}>
+                    <View style={styles.storyRingInner}>
+                      <Image
+                        source={{ uri: currentUser && currentUser.photoURL ? currentUser.photoURL : 'https://i.pravatar.cc/100' }}
+                        style={styles.storyImg}
+                      />
+                    </View>
+                  </View>
+                  <Text style={styles.storyName}>Your Story</Text>
+                </TouchableOpacity>
+                {stories.map(function(st) {
+                  return (
+                    <TouchableOpacity
+                      key={st.id}
+                      style={styles.storyItem}
+                      onPress={function() { openStory(st); }}
+                    >
+                      <View style={styles.storyRing}>
+                        <View style={styles.storyRingInner}>
+                          <Image
+                            source={{ uri: st.avatar ? st.avatar : 'https://i.pravatar.cc/100' }}
+                            style={styles.storyImg}
+                          />
+                        </View>
+                      </View>
+                      <Text style={styles.storyName} numberOfLines={1}>
+                        {st.username}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <View style={styles.divider} />
+            </View>
+          );
+        }}
         ListEmptyComponent={
-          <View style={s.emptyWrap}>
-            <Text style={s.emptyIcon}>📸</Text>
-            <Text style={s.emptyTitle}>No posts yet</Text>
-            <Text style={s.emptySub}>Be the first to share a moment!</Text>
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyIcon}>📸</Text>
+            <Text style={styles.emptyTitle}>No posts yet</Text>
+            <Text style={styles.emptySub}>Be the first to share!</Text>
           </View>
         }
+        renderItem={function(info) {
+          var item = info.item;
+          var liked = item.likes && item.likes.indexOf(uid) !== -1;
+          var likeCount = item.likes ? item.likes.length : 0;
+          var commentCount = item.comments ? item.comments.length : 0;
+
+          return (
+            <View style={styles.postCard}>
+              <View style={styles.postTop}>
+                <View style={styles.postUserRow}>
+                  <View style={styles.postAvatarWrap}>
+                    <Image
+                      source={{ uri: item.avatar ? item.avatar : 'https://i.pravatar.cc/100' }}
+                      style={styles.postAvatarImg}
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.postUser}>{item.username ? item.username : 'User'}</Text>
+                    {item.location ? (
+                      <Text style={styles.postLoc}>{'📍 ' + item.location}</Text>
+                    ) : null}
+                  </View>
+                </View>
+                <TouchableOpacity>
+                  <Text style={styles.postMore}>•••</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Image
+                source={{ uri: item.imageUrl }}
+                style={styles.postImage}
+                resizeMode="cover"
+              />
+
+              <View style={styles.postActions}>
+                <View style={styles.postActLeft}>
+                  <TouchableOpacity
+                    onPress={function() { handleLike(item); }}
+                    style={styles.actBtn}
+                  >
+                    <Text style={styles.actIcon}>{liked ? '❤️' : '🤍'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={function() { openComments(item); }}
+                    style={styles.actBtn}
+                  >
+                    <Text style={styles.actIcon}>💬</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actBtn}>
+                    <Text style={styles.actIcon}>✈️</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity>
+                  <Text style={styles.actIcon}>🔖</Text>
+                </TouchableOpacity>
+              </View>
+
+              {likeCount > 0 ? (
+                <Text style={styles.likeCount}>{likeCount + ' likes'}</Text>
+              ) : null}
+
+              {item.caption ? (
+                <Text style={styles.caption}>
+                  <Text style={styles.captionUser}>
+                    {(item.username ? item.username : 'User') + ' '}
+                  </Text>
+                  {item.caption}
+                </Text>
+              ) : null}
+
+              {commentCount > 0 ? (
+                <TouchableOpacity onPress={function() { openComments(item); }}>
+                  <Text style={styles.viewComments}>
+                    {'View all ' + commentCount + ' comments'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <Text style={styles.postTime}>
+                {getTimeAgo(item.createdAt && item.createdAt.toDate ? item.createdAt.toDate() : null)}
+              </Text>
+            </View>
+          );
+        }}
       />
 
-      {/* COMMENT MODAL */}
-      <Modal visible={commentModal} animationType="slide" onRequestClose={() => setCommentModal(false)}>
-        <View style={s.modalWrap}>
-          {/* Modal Handle */}
-          <View style={s.modalHandle} />
-          <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>Comments</Text>
-            <TouchableOpacity onPress={() => setCommentModal(false)}>
-              <Text style={s.modalClose}>✕</Text>
+      <Modal
+        visible={commentModal}
+        animationType="slide"
+        onRequestClose={function() { setCommentModal(false); }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Comments</Text>
+            <TouchableOpacity onPress={function() { setCommentModal(false); }}>
+              <Text style={styles.modalClose}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <FlatList
-            data={activePost?.comments || []}
-            keyExtractor={(_, i) => i.toString()}
-            renderItem={({ item }) => (
-              <View style={s.commentRow}>
-                <View style={s.commentAvatar}>
-                  <Text style={s.commentAvatarText}>
-                    {item.username?.[0]?.toUpperCase() || 'U'}
-                  </Text>
-                </View>
-                <View style={s.commentContent}>
-                  <Text style={s.commentUsername}>{item.username}</Text>
-                  <Text style={s.commentText}>{item.text}</Text>
-                </View>
-              </View>
-            )}
+            data={activePost ? (activePost.comments || []) : []}
+            keyExtractor={function(item, index) { return String(index); }}
             ListEmptyComponent={
-              <View style={s.emptyWrap}>
-                <Text style={s.emptyIcon}>💬</Text>
-                <Text style={s.emptySub}>No comments yet. Be first!</Text>
-              </View>
+              <Text style={styles.noComments}>No comments yet!</Text>
             }
+            renderItem={function(info) {
+              var item = info.item;
+              return (
+                <View style={styles.commentRow}>
+                  <View style={styles.commentAvatar}>
+                    <Text style={styles.commentAvatarTxt}>
+                      {item.username ? item.username[0].toUpperCase() : 'U'}
+                    </Text>
+                  </View>
+                  <View style={styles.commentRight}>
+                    <Text style={styles.commentUser}>{item.username}</Text>
+                    <Text style={styles.commentTxt}>{item.text}</Text>
+                  </View>
+                </View>
+              );
+            }}
           />
 
-          <View style={s.commentInputRow}>
+          <View style={styles.commentInputRow}>
             <TextInput
-              style={s.commentInput}
+              style={styles.commentInput}
               placeholder="Add a comment..."
               placeholderTextColor="#555"
               value={comment}
@@ -273,32 +357,46 @@ export default function HomeScreen() {
               multiline
             />
             <TouchableOpacity
-              onPress={addComment}
+              onPress={handleComment}
               disabled={!comment.trim()}
-              style={[s.sendBtn, !comment.trim() && s.sendDisabled]}>
-              <Text style={s.sendBtnText}>Post</Text>
+              style={comment.trim() ? styles.sendBtn : styles.sendBtnOff}
+            >
+              <Text style={styles.sendBtnTxt}>Post</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* STORY VIEWER */}
-      <Modal visible={storyModal} animationType="fade" onRequestClose={() => setStoryModal(false)}>
-        <View style={s.storyViewer}>
-          <View style={s.storyViewerBar} />
-          <View style={s.storyViewerHeader}>
-            <Image
-              source={{ uri: activeStory?.avatar || 'https://i.pravatar.cc/100' }}
-              style={s.storyViewerAvatar}
-            />
-            <Text style={s.storyViewerName}>{activeStory?.username}</Text>
-          </View>
-          {activeStory?.imageUrl && (
-            <Image source={{ uri: activeStory.imageUrl }}
-              style={s.storyViewerImg} resizeMode="cover" />
-          )}
-          <TouchableOpacity style={s.storyCloseBtn} onPress={() => setStoryModal(false)}>
-            <Text style={s.storyCloseTxt}>✕</Text>
+      <Modal
+        visible={storyModal}
+        animationType="fade"
+        onRequestClose={function() { setStoryModal(false); }}
+      >
+        <View style={styles.storyViewer}>
+          <View style={styles.storyViewerBar} />
+          {activeStory ? (
+            <View>
+              <View style={styles.storyViewerTop}>
+                <Image
+                  source={{ uri: activeStory.avatar ? activeStory.avatar : 'https://i.pravatar.cc/100' }}
+                  style={styles.storyViewerAvatar}
+                />
+                <Text style={styles.storyViewerName}>{activeStory.username}</Text>
+              </View>
+              {activeStory.imageUrl ? (
+                <Image
+                  source={{ uri: activeStory.imageUrl }}
+                  style={styles.storyViewerImage}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
+          ) : null}
+          <TouchableOpacity
+            style={styles.storyCloseBtn}
+            onPress={function() { setStoryModal(false); }}
+          >
+            <Text style={styles.storyCloseTxt}>✕</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -306,144 +404,67 @@ export default function HomeScreen() {
   );
 }
 
-function timeAgo(date) {
-  if (!date) return 'Just now';
-  const s = Math.floor((new Date() - date) / 1000);
-  if (s < 60) return 'Just now';
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: DARK },
-  loadingWrap: { flex: 1, backgroundColor: DARK, justifyContent: 'center', alignItems: 'center' },
-
-  // Header
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: BORDER,
-    backgroundColor: DARK,
-  },
-  headerLogo: { color: '#fff', fontSize: 24, fontWeight: '800', letterSpacing: 0.5 },
-  headerLogoC: { color: '#A855F7' },
-  headerIcons: { flexDirection: 'row', gap: 16 },
-  headerIconBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: CARD, justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: BORDER,
-  },
-  headerIconText: { color: '#fff', fontSize: 16 },
-
-  // Stories
-  storiesRow: { paddingVertical: 14, paddingHorizontal: 10, backgroundColor: DARK },
-  storyWrap: { alignItems: 'center', marginHorizontal: 7, width: 70 },
-  storyGradientRing: {
-    width: 68, height: 68, borderRadius: 34,
-    backgroundColor: '#A855F7',
-    padding: 2.5, marginBottom: 5,
-    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6, shadowRadius: 8, elevation: 8,
-  },
-  storyInnerRing: {
-    flex: 1, borderRadius: 32,
-    borderWidth: 2, borderColor: DARK,
-    overflow: 'hidden',
-  },
-  storyAvatar: { width: '100%', height: '100%' },
-  storyName: { color: '#aaa', fontSize: 11, textAlign: 'center' },
-  separator: { height: 1, backgroundColor: BORDER },
-
-  // Post
+var styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: DARK },
+  center: { flex: 1, backgroundColor: DARK, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER, backgroundColor: DARK },
+  headerLogo: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  headerRight: { flexDirection: 'row', gap: 12 },
+  headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: CARD, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: BORDER },
+  headerBtnTxt: { color: '#fff', fontSize: 16 },
+  storiesRow: { paddingVertical: 12, paddingHorizontal: 10, backgroundColor: DARK },
+  storyItem: { alignItems: 'center', marginHorizontal: 7, width: 68 },
+  storyRing: { width: 66, height: 66, borderRadius: 33, backgroundColor: PURPLE, padding: 2, marginBottom: 5 },
+  storyRingInner: { flex: 1, borderRadius: 30, borderWidth: 2, borderColor: DARK, overflow: 'hidden' },
+  storyImg: { width: '100%', height: '100%' },
+  storyName: { color: '#aaa', fontSize: 10, textAlign: 'center' },
+  divider: { height: 1, backgroundColor: BORDER },
   postCard: { backgroundColor: DARK, marginBottom: 2 },
-  postHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 10,
-  },
+  postTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   postUserRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  postAvatarRing: {
-    width: 40, height: 40, borderRadius: 20,
-    borderWidth: 2, borderColor: '#A855F7', padding: 1.5,
-  },
-  postAvatar: { width: '100%', height: '100%', borderRadius: 18 },
-  postUsername: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  postLocation: { color: '#888', fontSize: 11, marginTop: 1 },
-  moreBtn: { padding: 4 },
-  moreDots: { color: '#888', fontSize: 18, letterSpacing: 1 },
-  postImage: { width, height: width, backgroundColor: CARD },
-
-  // Actions
-  actionsRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 10,
-  },
-  actionsLeft: { flexDirection: 'row', gap: 18 },
-  actionBtn: {},
-  actionEmoji: { fontSize: 26 },
-  likedEmoji: { transform: [{ scale: 1.1 }] },
-  likeCount: { color: '#fff', fontWeight: '700', fontSize: 14, paddingHorizontal: 14 },
-  caption: { color: '#e0e0e0', fontSize: 14, paddingHorizontal: 14, paddingTop: 4, lineHeight: 20 },
-  captionUsername: { color: '#fff', fontWeight: '700' },
-  viewAllComments: { color: '#888', fontSize: 13, paddingHorizontal: 14, paddingTop: 4 },
-  postTime: { color: '#555', fontSize: 11, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12 },
-
-  // Empty
-  emptyWrap: { alignItems: 'center', padding: 60 },
+  postAvatarWrap: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: PURPLE, padding: 1.5, overflow: 'hidden' },
+  postAvatarImg: { width: '100%', height: '100%', borderRadius: 16 },
+  postUser: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  postLoc: { color: '#888', fontSize: 11, marginTop: 1 },
+  postMore: { color: '#888', fontSize: 18 },
+  postImage: { width: screenWidth, height: screenWidth, backgroundColor: CARD },
+  postActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  postActLeft: { flexDirection: 'row', gap: 16 },
+  actBtn: {},
+  actIcon: { fontSize: 26 },
+  likeCount: { color: '#fff', fontWeight: '700', fontSize: 13, paddingHorizontal: 14 },
+  caption: { color: '#ddd', fontSize: 13, paddingHorizontal: 14, paddingTop: 3, lineHeight: 20 },
+  captionUser: { color: '#fff', fontWeight: '700' },
+  viewComments: { color: '#777', fontSize: 12, paddingHorizontal: 14, paddingTop: 3 },
+  postTime: { color: '#555', fontSize: 11, paddingHorizontal: 14, paddingTop: 3, paddingBottom: 10 },
+  emptyWrap: { alignItems: 'center', paddingTop: 80 },
   emptyIcon: { fontSize: 56 },
   emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16 },
-  emptySub: { color: '#666', fontSize: 14, marginTop: 8, textAlign: 'center' },
-
-  // Comment Modal
-  modalWrap: { flex: 1, backgroundColor: '#0D0D14' },
+  emptySub: { color: '#666', fontSize: 14, marginTop: 6 },
+  modalContainer: { flex: 1, backgroundColor: '#0D0D14' },
   modalHandle: { width: 36, height: 4, backgroundColor: '#333', borderRadius: 2, alignSelf: 'center', marginTop: 12 },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: BORDER,
-  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: BORDER },
   modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
   modalClose: { color: '#888', fontSize: 20 },
+  noComments: { color: '#555', textAlign: 'center', padding: 40, fontSize: 15 },
   commentRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  commentAvatar: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#A855F7', justifyContent: 'center', alignItems: 'center',
-  },
-  commentAvatarText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  commentContent: { flex: 1 },
-  commentUsername: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  commentText: { color: '#ccc', fontSize: 14, marginTop: 2, lineHeight: 20 },
-  commentInputRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderTopWidth: 1, borderTopColor: BORDER, padding: 12,
-  },
-  commentInput: {
-    flex: 1, backgroundColor: CARD, borderRadius: 22,
-    paddingHorizontal: 16, paddingVertical: 10,
-    color: '#fff', fontSize: 14, maxHeight: 100,
-    borderWidth: 1, borderColor: BORDER,
-  },
-  sendBtn: {
-    backgroundColor: '#A855F7', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 8,
-  },
-  sendDisabled: { backgroundColor: '#2a2a3a' },
-  sendBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-
-  // Story Viewer
+  commentAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: PURPLE, justifyContent: 'center', alignItems: 'center' },
+  commentAvatarTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  commentRight: { flex: 1 },
+  commentUser: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  commentTxt: { color: '#ccc', fontSize: 14, marginTop: 2, lineHeight: 20 },
+  commentInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: BORDER, padding: 12 },
+  commentInput: { flex: 1, backgroundColor: CARD, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, color: '#fff', fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: BORDER },
+  sendBtn: { backgroundColor: PURPLE, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
+  sendBtnOff: { backgroundColor: '#2a2a3a', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
+  sendBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
   storyViewer: { flex: 1, backgroundColor: '#000' },
-  storyViewerBar: {
-    position: 'absolute', top: 50, left: 16, right: 16, height: 3,
-    backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 2, zIndex: 10,
-  },
-  storyViewerHeader: {
-    position: 'absolute', top: 65, left: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 10,
-  },
-  storyViewerAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: '#A855F7' },
+  storyViewerBar: { position: 'absolute', top: 50, left: 16, right: 16, height: 3, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 2, zIndex: 10 },
+  storyViewerTop: { position: 'absolute', top: 65, left: 16, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 10 },
+  storyViewerAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: PURPLE },
   storyViewerName: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  storyViewerImg: { width, height: '100%' },
+  storyViewerImage: { width: screenWidth, height: '100%' },
   storyCloseBtn: { position: 'absolute', top: 50, right: 16, zIndex: 10 },
-  storyCloseTxt: { color: '#fff', fontSize: 22, fontWeight: '300' },
+  storyCloseTxt: { color: '#fff', fontSize: 22 }
 });
-        
+                      
