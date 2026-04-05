@@ -467,4 +467,4 @@ var styles = StyleSheet.create({
   storyCloseBtn: { position: 'absolute', top: 50, right: 16, zIndex: 10 },
   storyCloseTxt: { color: '#fff', fontSize: 22 }
 });
-                      
+  
