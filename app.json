@@ -5,9 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0A0A0F"
+    },
     "android": {
       "package": "com.creature.app",
-      "versionCode": 11
+      "versionCode": 12
     },
     "extra": {
       "eas": {
