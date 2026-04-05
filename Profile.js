@@ -1,206 +1,165 @@
-// 👤 Profile.js — Premium Profile Screen
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, Image, FlatList, TouchableOpacity, StyleSheet,
-  SafeAreaView, Alert, ActivityIndicator, Dimensions, ScrollView
+  View, Text, Image, FlatList, TouchableOpacity,
+  StyleSheet, SafeAreaView, Alert, ActivityIndicator,
+  Dimensions, ScrollView
 } from 'react-native';
 import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
-const { width } = Dimensions.get('window');
-const GRID = (width - 4) / 3;
-const PURPLE = '#8B5CF6';
-const PINK = '#EC4899';
-const DARK = '#0A0A0F';
-const CARD = '#13131A';
-const BORDER = '#1E1E2E';
+var W = Dimensions.get('window').width;
+var GRID = (W - 4) / 3;
 
-export default function ProfileScreen({ onLogout }) {
-  const [userData, setUserData] = useState(null);
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const uid = auth.currentUser?.uid;
+export default function ProfileScreen(props) {
+  var onLogout = props.onLogout;
+  var [userData, setUserData] = useState(null);
+  var [posts, setPosts] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var uid = auth.currentUser ? auth.currentUser.uid : '';
 
-  useEffect(() => {
+  useEffect(function() {
     if (!uid) return;
-    getDoc(doc(db, 'users', uid)).then(snap => {
+    getDoc(doc(db, 'users', uid)).then(function(snap) {
       if (snap.exists()) setUserData(snap.data());
       setLoading(false);
     });
-    const q = query(collection(db, 'posts'), where('uid', '==', uid));
-    const unsub = onSnapshot(q, snap => {
-      const sorted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setPosts(sorted);
+    var q = query(collection(db, 'posts'), where('uid', '==', uid));
+    return onSnapshot(q, function(snap) {
+      var list = snap.docs.map(function(d) {
+        var data = d.data();
+        data.id = d.id;
+        return data;
+      }).sort(function(a, b) {
+        return (b.createdAt ? b.createdAt.seconds || 0 : 0) - (a.createdAt ? a.createdAt.seconds || 0 : 0);
+      });
+      setPosts(list);
     });
-    return unsub;
   }, [uid]);
 
-  const handleLogout = () => {
+  function confirmLogout() {
     Alert.alert('Logout', 'Pakka logout karna hai?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: onLogout },
+      { text: 'Logout', style: 'destructive', onPress: onLogout }
     ]);
-  };
+  }
 
-  if (loading) return (
-    <View style={s.center}><ActivityIndicator color={PURPLE} size="large" /></View>
-  );
+  if (loading) {
+    return (
+      <View style={st.center}>
+        <ActivityIndicator color="#8B5CF6" size="large" />
+      </View>
+    );
+  }
 
-  const user = userData || {};
+  var user = userData || {};
+  var displayName = user.name || (auth.currentUser ? auth.currentUser.displayName : '') || 'User';
+  var displayUsername = user.username || (auth.currentUser ? auth.currentUser.displayName : '') || 'user';
+  var avatarUrl = user.avatar || (auth.currentUser ? auth.currentUser.photoURL : '') || ('https://i.pravatar.cc/150?u=' + uid);
 
   return (
-    <View style={s.safe}>
-      {/* HEADER */}
-      <View style={s.header}>
-        <Text style={s.headerName}>{user.username || auth.currentUser?.displayName || 'User'}</Text>
-        <TouchableOpacity onPress={handleLogout} style={s.settingsBtn}>
-          <Text style={s.settingsIcon}>⚙️</Text>
+    <SafeAreaView style={st.safe}>
+      <View style={st.header}>
+        <Text style={st.headerName}>{displayUsername}</Text>
+        <TouchableOpacity onPress={confirmLogout}>
+          <Text style={st.settingsIco}>⚙️</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* PROFILE TOP */}
-        <View style={s.profileTop}>
-          {/* Avatar with gradient ring */}
-          <View style={s.avatarRing}>
-            <Image
-              source={{ uri: user.avatar || auth.currentUser?.photoURL || `https://i.pravatar.cc/150?u=${uid}` }}
-              style={s.avatar}
-            />
+        <View style={st.topRow}>
+          <View style={st.avatarRing}>
+            <Image source={{ uri: avatarUrl }} style={st.avatar} />
           </View>
-
-          {/* Stats */}
-          <View style={s.statsRow}>
-            {[
-              { label: 'Posts', value: posts.length },
-              { label: 'Followers', value: user.followers || 0 },
-              { label: 'Following', value: user.following || 0 },
-            ].map(stat => (
-              <View key={stat.label} style={s.statItem}>
-                <Text style={s.statNum}>{stat.value.toLocaleString()}</Text>
-                <Text style={s.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* BIO */}
-        <View style={s.bioSection}>
-          <Text style={s.bioName}>{user.name || auth.currentUser?.displayName || 'Creature User'}</Text>
-          {user.bio ? <Text style={s.bioText}>{user.bio}</Text> : null}
-        </View>
-
-        {/* EDIT PROFILE */}
-        <View style={s.btnRow}>
-          <TouchableOpacity style={s.editBtn}>
-            <Text style={s.editBtnText}>Edit Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.shareBtn}>
-            <Text style={s.shareBtnText}>Share Profile</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* POSTS GRID */}
-        <View style={s.gridSection}>
-          {posts.length === 0 ? (
-            <View style={s.noPostsWrap}>
-              <View style={s.noPostsIcon}>
-                <Text style={s.noPostsIconText}>📷</Text>
-              </View>
-              <Text style={s.noPostsTitle}>No Posts Yet</Text>
-              <Text style={s.noPostsSub}>Share your first moment!</Text>
+          <View style={st.statsRow}>
+            <View style={st.stat}>
+              <Text style={st.statNum}>{posts.length}</Text>
+              <Text style={st.statLbl}>Posts</Text>
             </View>
-          ) : (
-            <FlatList
-              data={posts}
-              numColumns={3}
-              scrollEnabled={false}
-              keyExtractor={i => i.id}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity style={[s.gridItem, index % 3 !== 2 && { marginRight: 2 }]}>
-                  <Image source={{ uri: item.imageUrl }} style={s.gridImg} />
-                  {item.likes?.length > 0 && (
-                    <View style={s.gridOverlay}>
-                      <Text style={s.gridLikes}>❤️ {item.likes.length}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              )}
-              ItemSeparatorComponent={() => <View style={{ height: 2 }} />}
-            />
-          )}
+            <View style={st.stat}>
+              <Text style={st.statNum}>{user.followers || 0}</Text>
+              <Text style={st.statLbl}>Followers</Text>
+            </View>
+            <View style={st.stat}>
+              <Text style={st.statNum}>{user.following || 0}</Text>
+              <Text style={st.statLbl}>Following</Text>
+            </View>
+          </View>
         </View>
+
+        <View style={st.bio}>
+          <Text style={st.bioName}>{displayName}</Text>
+          {user.bio ? <Text style={st.bioTxt}>{user.bio}</Text> : null}
+        </View>
+
+        <View style={st.btnRow}>
+          <TouchableOpacity style={st.editBtn}>
+            <Text style={st.editBtnTxt}>Edit Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.editBtn}>
+            <Text style={st.editBtnTxt}>Share</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={st.divider} />
+
+        {posts.length === 0 ? (
+          <View style={st.noPost}>
+            <Text style={st.noPostIco}>📷</Text>
+            <Text style={st.noPostTxt}>No posts yet</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={posts}
+            numColumns={3}
+            scrollEnabled={false}
+            keyExtractor={function(item) { return item.id; }}
+            renderItem={function(info) {
+              var item = info.item;
+              var idx = info.index;
+              return (
+                <TouchableOpacity style={[st.gridItem, idx % 3 !== 2 ? { marginRight: 2 } : {}]}>
+                  <Image source={{ uri: item.imageUrl }} style={st.gridImg} />
+                </TouchableOpacity>
+              );
+            }}
+            ItemSeparatorComponent={function() { return <View style={{ height: 2 }} />; }}
+          />
+        )}
+
+        <TouchableOpacity style={st.logoutBtn} onPress={confirmLogout}>
+          <Text style={st.logoutTxt}>Logout</Text>
+        </TouchableOpacity>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: DARK },
-  center: { flex: 1, backgroundColor: DARK, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: BORDER,
-  },
-  headerName: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  settingsBtn: { padding: 4 },
-  settingsIcon: { fontSize: 22 },
-
-  profileTop: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 20, gap: 24,
-  },
-  avatarRing: {
-    width: 90, height: 90, borderRadius: 45,
-    padding: 3, backgroundColor: PURPLE,
-    shadowColor: PURPLE, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5, shadowRadius: 12, elevation: 10,
-  },
-  avatar: { width: '100%', height: '100%', borderRadius: 42, borderWidth: 2, borderColor: DARK },
-
+var st = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#0A0A0F' },
+  center: { flex: 1, backgroundColor: '#0A0A0F', justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#1E1E2E' },
+  headerName: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  settingsIco: { fontSize: 22 },
+  topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 18, gap: 20 },
+  avatarRing: { width: 88, height: 88, borderRadius: 44, padding: 3, backgroundColor: '#8B5CF6' },
+  avatar: { width: '100%', height: '100%', borderRadius: 40, borderWidth: 2, borderColor: '#0A0A0F' },
   statsRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
-  statItem: { alignItems: 'center' },
-  statNum: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  statLabel: { color: '#666', fontSize: 12, marginTop: 2 },
-
-  bioSection: { paddingHorizontal: 16, paddingBottom: 16 },
-  bioName: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  bioText: { color: '#aaa', fontSize: 14, marginTop: 4, lineHeight: 20 },
-
-  btnRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 20 },
-  editBtn: {
-    flex: 1, backgroundColor: CARD, borderRadius: 12,
-    paddingVertical: 9, alignItems: 'center',
-    borderWidth: 1, borderColor: BORDER,
-  },
-  editBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  shareBtn: {
-    flex: 1, backgroundColor: CARD, borderRadius: 12,
-    paddingVertical: 9, alignItems: 'center',
-    borderWidth: 1, borderColor: BORDER,
-  },
-  shareBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-
-  gridSection: { borderTopWidth: 1, borderTopColor: BORDER },
+  stat: { alignItems: 'center' },
+  statNum: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  statLbl: { color: '#666', fontSize: 11, marginTop: 2 },
+  bio: { paddingHorizontal: 16, paddingBottom: 14 },
+  bioName: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  bioTxt: { color: '#aaa', fontSize: 13, marginTop: 3 },
+  btnRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, marginBottom: 16 },
+  editBtn: { flex: 1, backgroundColor: '#13131A', borderRadius: 10, paddingVertical: 8, alignItems: 'center', borderWidth: 1, borderColor: '#1E1E2E' },
+  editBtnTxt: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  divider: { height: 1, backgroundColor: '#1E1E2E', marginBottom: 2 },
+  noPost: { alignItems: 'center', paddingVertical: 50 },
+  noPostIco: { fontSize: 48, marginBottom: 12 },
+  noPostTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
   gridItem: { width: GRID, height: GRID, marginBottom: 2 },
-  gridImg: { width: '100%', height: '100%', backgroundColor: CARD },
-  gridOverlay: {
-    position: 'absolute', bottom: 6, left: 6,
-    backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 3,
-  },
-  gridLikes: { color: '#fff', fontSize: 11, fontWeight: '600' },
-
-  noPostsWrap: { alignItems: 'center', paddingVertical: 60 },
-  noPostsIcon: {
-    width: 72, height: 72, borderRadius: 22, backgroundColor: CARD,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: BORDER, marginBottom: 16,
-  },
-  noPostsIconText: { fontSize: 32 },
-  noPostsTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  noPostsSub: { color: '#666', fontSize: 14, marginTop: 6 },
+  gridImg: { width: '100%', height: '100%', backgroundColor: '#13131A' },
+  logoutBtn: { margin: 16, backgroundColor: '#13131A', borderRadius: 12, paddingVertical: 13, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  logoutTxt: { color: '#ff4444', fontWeight: '600', fontSize: 14 }
 });
-    
+      
