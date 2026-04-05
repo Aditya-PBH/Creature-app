@@ -1,116 +1,116 @@
-// 🎬 Reels.js — Vertical video reels (TikTok style)
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
-  Dimensions, SafeAreaView, ActivityIndicator
+  View, Text, FlatList, TouchableOpacity,
+  StyleSheet, Dimensions, SafeAreaView, ActivityIndicator, Image
 } from 'react-native';
-import { Video } from 'expo-av';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 
-const { width, height } = Dimensions.get('window');
-const PINK = '#ff3b5c';
+var W = Dimensions.get('window').width;
+var H = Dimensions.get('window').height;
 
 export default function ReelsScreen() {
-  const [reels, setReels] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  var [reels, setReels] = useState([]);
+  var [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const q = query(collection(db, 'reels'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setReels(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  useEffect(function() {
+    var q = query(collection(db, 'reels'), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, function(snap) {
+      var list = snap.docs.map(function(d) {
+        var data = d.data();
+        data.id = d.id;
+        return data;
+      });
+      setReels(list);
       setLoading(false);
     });
-    return unsub;
   }, []);
 
-  const ReelItem = ({ item, index }) => {
-    const videoRef = useRef(null);
-    const isActive = index === activeIndex;
-
-    useEffect(() => {
-      if (isActive) videoRef.current?.playAsync();
-      else videoRef.current?.pauseAsync();
-    }, [isActive]);
-
+  if (loading) {
     return (
-      <View style={s.reel}>
-        <Video
-          ref={videoRef}
-          source={{ uri: item.videoUrl }}
-          style={s.video}
-          resizeMode="cover"
-          isLooping
-          shouldPlay={isActive}
-        />
-        {/* Overlay */}
-        <View style={s.overlay}>
-          <View style={s.rightActions}>
-            <TouchableOpacity style={s.actionBtn}>
-              <Text style={s.actionIcon}>❤️</Text>
-              <Text style={s.actionCount}>{item.likes?.length || 0}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.actionBtn}>
-              <Text style={s.actionIcon}>💬</Text>
-              <Text style={s.actionCount}>{item.comments?.length || 0}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.actionBtn}>
-              <Text style={s.actionIcon}>📤</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={s.bottomInfo}>
-            <Text style={s.reelUsername}>@{item.username || 'user'}</Text>
-            {item.caption ? <Text style={s.reelCaption}>{item.caption}</Text> : null}
-          </View>
-        </View>
+      <View style={st.center}>
+        <ActivityIndicator color="#8B5CF6" size="large" />
       </View>
     );
-  };
+  }
 
-  if (loading) return (
-    <View style={s.center}><ActivityIndicator color={PINK} size="large" /></View>
-  );
-
-  if (reels.length === 0) return (
-    <View style={s.center}>
-      <Text style={s.emptyIcon}>🎬</Text>
-      <Text style={s.emptyText}>Abhi koi reel nahi!</Text>
-    </View>
-  );
+  if (reels.length === 0) {
+    return (
+      <View style={st.center}>
+        <Text style={st.emptyIco}>🎬</Text>
+        <Text style={st.emptyTxt}>No reels yet!</Text>
+        <Text style={st.emptySub}>Upload a video to get started</Text>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={st.safe}>
       <FlatList
         data={reels}
-        keyExtractor={i => i.id}
-        pagingEnabled
+        keyExtractor={function(item) { return item.id; }}
+        pagingEnabled={true}
         showsVerticalScrollIndicator={false}
-        snapToInterval={height}
+        snapToInterval={H}
         decelerationRate="fast"
-        onMomentumScrollEnd={e => {
-          setActiveIndex(Math.round(e.nativeEvent.contentOffset.y / height));
+        renderItem={function(info) {
+          var item = info.item;
+          var likes = Array.isArray(item.likes) ? item.likes.length : 0;
+          var comments = Array.isArray(item.comments) ? item.comments.length : 0;
+          return (
+            <View style={st.reel}>
+              {item.thumbnailUrl ? (
+                <Image source={{ uri: item.thumbnailUrl }} style={st.reelBg} resizeMode="cover" />
+              ) : (
+                <View style={st.reelBg} />
+              )}
+              <View style={st.overlay}>
+                <View style={st.rightCol}>
+                  <TouchableOpacity style={st.actionItem}>
+                    <Text style={st.actionIco}>❤️</Text>
+                    <Text style={st.actionTxt}>{likes}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={st.actionItem}>
+                    <Text style={st.actionIco}>💬</Text>
+                    <Text style={st.actionTxt}>{comments}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={st.actionItem}>
+                    <Text style={st.actionIco}>📤</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={st.bottomInfo}>
+                  <Text style={st.reelUser}>{'@' + (item.username || 'user')}</Text>
+                  {item.caption ? <Text style={st.reelCaption}>{item.caption}</Text> : null}
+                </View>
+              </View>
+              <View style={st.playBtn}>
+                <Text style={st.playIco}>▶</Text>
+              </View>
+            </View>
+          );
         }}
-        renderItem={({ item, index }) => <ReelItem item={item} index={index} />}
       />
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
+var st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#000' },
-  center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  emptyIcon: { fontSize: 60 },
-  emptyText: { color: '#fff', fontSize: 18, marginTop: 16 },
-  reel: { width, height, backgroundColor: '#000' },
-  video: { width, height },
+  center: { flex: 1, backgroundColor: '#0A0A0F', justifyContent: 'center', alignItems: 'center' },
+  emptyIco: { fontSize: 56, marginBottom: 12 },
+  emptyTxt: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  emptySub: { color: '#888', fontSize: 13, marginTop: 6 },
+  reel: { width: W, height: H, backgroundColor: '#000' },
+  reelBg: { width: W, height: H, backgroundColor: '#111' },
   overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  rightActions: { gap: 24, marginBottom: 20 },
-  actionBtn: { alignItems: 'center' },
-  actionIcon: { fontSize: 30 },
-  actionCount: { color: '#fff', fontSize: 12, marginTop: 4, fontWeight: '600' },
+  rightCol: { gap: 20, marginBottom: 20 },
+  actionItem: { alignItems: 'center' },
+  actionIco: { fontSize: 28 },
+  actionTxt: { color: '#fff', fontSize: 12, marginTop: 4, fontWeight: '600' },
   bottomInfo: { flex: 1, marginRight: 16 },
-  reelUsername: { color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 6 },
+  reelUser: { color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 4 },
   reelCaption: { color: '#ddd', fontSize: 13, lineHeight: 18 },
+  playBtn: { position: 'absolute', top: '45%', left: '45%' },
+  playIco: { color: 'rgba(255,255,255,0.7)', fontSize: 48 }
 });
-            
+    
