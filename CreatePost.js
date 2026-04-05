@@ -6,8 +6,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, auth } from './firebase';
+import { db, auth } from './firebase';
 
 export default function CreatePostScreen(props) {
   var onDone = props.onDone;
@@ -15,20 +14,20 @@ export default function CreatePostScreen(props) {
   var [caption, setCaption] = useState('');
   var [location, setLocation] = useState('');
   var [loading, setLoading] = useState(false);
-  var [progress, setProgress] = useState('');
 
   function pickGallery() {
     ImagePicker.requestMediaLibraryPermissionsAsync()
       .then(function(perm) {
         if (!perm.granted) {
-          Alert.alert('Permission chahiye!', 'Gallery access allow karo settings mein.');
+          Alert.alert('Permission chahiye!', 'Gallery access allow karo.');
           return null;
         }
         return ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.All,
           allowsEditing: true,
           aspect: [1, 1],
-          quality: 0.7
+          quality: 0.5,
+          base64: true
         });
       })
       .then(function(result) {
@@ -43,14 +42,15 @@ export default function CreatePostScreen(props) {
     ImagePicker.requestCameraPermissionsAsync()
       .then(function(perm) {
         if (!perm.granted) {
-          Alert.alert('Permission chahiye!', 'Camera access allow karo settings mein.');
+          Alert.alert('Permission chahiye!', 'Camera access allow karo.');
           return null;
         }
         return ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.All,
           allowsEditing: true,
           aspect: [1, 1],
-          quality: 0.7
+          quality: 0.5,
+          base64: true
         });
       })
       .then(function(result) {
@@ -71,50 +71,28 @@ export default function CreatePostScreen(props) {
       Alert.alert('Error', 'Login karo pehle!');
       return;
     }
+    if (!media.base64) {
+      Alert.alert('Error', 'Media load nahi hua. Dobara try karo.');
+      return;
+    }
 
     setLoading(true);
-    setProgress('Uploading...');
 
-    var isVideo = media.type === 'video';
-    var ext = isVideo ? 'mp4' : 'jpg';
-    var folder = isVideo ? 'videos' : 'images';
-    var filename = folder + '/' + user.uid + '/' + Date.now() + '.' + ext;
-    var storageRef = ref(storage, filename);
+    var imageUrl = 'data:image/jpeg;base64,' + media.base64;
 
-    fetch(media.uri)
-      .then(function(res) { return res.blob(); })
-      .then(function(blob) {
-        setProgress('Uploading file...');
-        return uploadBytes(storageRef, blob);
-      })
+    addDoc(collection(db, 'posts'), {
+      uid: user.uid,
+      username: user.displayName || 'User',
+      avatar: user.photoURL || '',
+      imageUrl: imageUrl,
+      caption: caption.trim(),
+      location: location.trim(),
+      likes: [],
+      comments: [],
+      createdAt: serverTimestamp()
+    })
       .then(function() {
-        setProgress('Getting URL...');
-        return getDownloadURL(storageRef);
-      })
-      .then(function(downloadUrl) {
-        setProgress('Saving post...');
-        var postData = {
-          uid: user.uid,
-          username: user.displayName || 'User',
-          avatar: user.photoURL || '',
-          imageUrl: downloadUrl,
-          isVideo: isVideo,
-          caption: caption.trim(),
-          location: location.trim(),
-          likes: [],
-          comments: [],
-          createdAt: serverTimestamp()
-        };
-
-        if (isVideo) {
-          postData.videoUrl = downloadUrl;
-        }
-
-        return addDoc(collection(db, 'posts'), postData);
-      })
-      .then(function() {
-        setProgress('');
-        Alert.alert('Post ho gaya!', 'Teri post feed mein aa gayi!');
+        Alert.alert('Done!', 'Post ho gaya!');
         setMedia(null);
         setCaption('');
         setLocation('');
@@ -122,13 +100,10 @@ export default function CreatePostScreen(props) {
       })
       .catch(function(e) {
         console.error(e);
-        setProgress('');
-        Alert.alert('Error', 'Upload fail! Internet check karo aur try again.');
+        Alert.alert('Error', 'Post nahi hua. Try again!');
       })
       .finally(function() { setLoading(false); });
   }
-
-  var isVideo = media && media.type === 'video';
 
   return (
     <SafeAreaView style={st.safe}>
@@ -146,32 +121,23 @@ export default function CreatePostScreen(props) {
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* MEDIA PREVIEW */}
         <TouchableOpacity style={st.previewBox} onPress={pickGallery} disabled={loading}>
           {media ? (
             <View style={st.previewWrap}>
               <Image source={{ uri: media.uri }} style={st.preview} resizeMode="cover" />
-              {isVideo ? (
-                <View style={st.videoTag}>
-                  <Text style={st.videoTagTxt}>🎬 Video</Text>
-                </View>
-              ) : null}
-              {!loading ? (
-                <View style={st.changeTag}>
-                  <Text style={st.changeTxt}>Change</Text>
-                </View>
-              ) : null}
+              <View style={st.changeTag}>
+                <Text style={st.changeTxt}>Change</Text>
+              </View>
             </View>
           ) : (
             <View style={st.placeholder}>
               <Text style={st.phIco}>📸</Text>
-              <Text style={st.phTitle}>Add Photo or Video</Text>
-              <Text style={st.phSub}>Tap to select from gallery</Text>
+              <Text style={st.phTitle}>Photo ya Video add karo</Text>
+              <Text style={st.phSub}>Tap karo select karne ke liye</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        {/* PICK BUTTONS */}
         <View style={st.pickRow}>
           <TouchableOpacity style={st.pickBtn} onPress={pickGallery} disabled={loading}>
             <Text style={st.pickIco}>🖼️</Text>
@@ -183,15 +149,13 @@ export default function CreatePostScreen(props) {
           </TouchableOpacity>
         </View>
 
-        {/* LOADING PROGRESS */}
         {loading ? (
           <View style={st.progressWrap}>
             <ActivityIndicator color="#8B5CF6" size="large" />
-            <Text style={st.progressTxt}>{progress}</Text>
+            <Text style={st.progressTxt}>Post ho raha hai...</Text>
           </View>
         ) : null}
 
-        {/* CAPTION */}
         <View style={st.section}>
           <Text style={st.sectionLabel}>Caption</Text>
           <TextInput
@@ -207,12 +171,11 @@ export default function CreatePostScreen(props) {
           <Text style={st.charCount}>{caption.length + '/500'}</Text>
         </View>
 
-        {/* LOCATION */}
         <View style={st.section}>
           <Text style={st.sectionLabel}>Location (Optional)</Text>
           <TextInput
             style={st.locationBox}
-            placeholder="📍 Location add karo"
+            placeholder="Location add karo"
             placeholderTextColor="#555"
             value={location}
             onChangeText={setLocation}
@@ -220,7 +183,6 @@ export default function CreatePostScreen(props) {
           />
         </View>
 
-        {/* POST BUTTON */}
         <TouchableOpacity
           style={!media || loading ? st.postBtnOff : st.postBtn}
           onPress={doPost}
@@ -229,10 +191,10 @@ export default function CreatePostScreen(props) {
           {loading ? (
             <View style={st.postBtnInner}>
               <ActivityIndicator color="#fff" size="small" />
-              <Text style={st.postBtnTxt}>{progress || 'Uploading...'}</Text>
+              <Text style={st.postBtnTxt}>Uploading...</Text>
             </View>
           ) : (
-            <Text style={st.postBtnTxt}>🚀 Post Karo</Text>
+            <Text style={st.postBtnTxt}>Post Karo</Text>
           )}
         </TouchableOpacity>
 
@@ -260,21 +222,15 @@ var st = StyleSheet.create({
   },
   previewWrap: { width: '100%', height: '100%' },
   preview: { width: '100%', height: '100%' },
-  videoTag: {
-    position: 'absolute', top: 12, left: 12,
-    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 5
-  },
-  videoTagTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
   changeTag: {
     position: 'absolute', bottom: 12, right: 12,
-    backgroundColor: 'rgba(139,92,246,0.85)', borderRadius: 8,
+    backgroundColor: 'rgba(139,92,246,0.9)', borderRadius: 8,
     paddingHorizontal: 12, paddingVertical: 6
   },
   changeTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  placeholder: { alignItems: 'center', gap: 8 },
-  phIco: { fontSize: 72 },
-  phTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  placeholder: { alignItems: 'center', gap: 10 },
+  phIco: { fontSize: 64 },
+  phTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
   phSub: { color: '#555', fontSize: 13 },
   pickRow: { flexDirection: 'row', gap: 12, padding: 16 },
   pickBtn: {
@@ -282,7 +238,7 @@ var st = StyleSheet.create({
     paddingVertical: 16, alignItems: 'center',
     borderWidth: 1, borderColor: '#1E1E2E', gap: 6
   },
-  pickIco: { fontSize: 32 },
+  pickIco: { fontSize: 30 },
   pickLbl: { color: '#fff', fontWeight: '600', fontSize: 13 },
   progressWrap: { alignItems: 'center', paddingVertical: 16, gap: 10 },
   progressTxt: { color: '#8B5CF6', fontSize: 14, fontWeight: '600' },
@@ -312,4 +268,4 @@ var st = StyleSheet.create({
   postBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   postBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 16 }
 });
-      
+        
