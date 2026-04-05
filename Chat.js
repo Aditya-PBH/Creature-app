@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, Image, StatusBar,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
-  Dimensions, useColorScheme
+  KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions
 } from 'react-native';
 import {
   collection, query, orderBy, onSnapshot,
@@ -11,223 +10,165 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
-const { width } = Dimensions.get('window');
+var W = Dimensions.get('window').width;
 
-// ── Theme ────────────────────────────────────
-function useTheme() {
-  const scheme = useColorScheme();
-  const dark = scheme === 'dark';
-  return {
-    dark,
-    bg:         dark ? '#0A0A0F' : '#F5F0FF',
-    card:       dark ? '#13131A' : '#FFFFFF',
-    border:     dark ? '#1E1E2E' : '#E8E0FF',
-    text:       dark ? '#FFFFFF' : '#1A1A2E',
-    subText:    dark ? '#666666' : '#8B8BA0',
-    inputBg:    dark ? '#13131A' : '#FFFFFF',
-    headerBg:   dark ? '#0D0D14' : '#FFFFFF',
-    navBg:      dark ? '#0D0D14' : '#FFFFFF',
-    bubbleMe:       '#8B5CF6',
-    bubbleMeTxt:    '#FFFFFF',
-    bubbleOther:    dark ? '#1E1E2E' : '#FFFFFF',
-    bubbleOtherTxt: dark ? '#E0E0E0' : '#1A1A2E',
-    searchBg:   dark ? '#13131A' : '#EDE8FF',
-    onlineDot:  '#22C55E',
-    purple:     '#8B5CF6',
-    pink:       '#EC4899',
-  };
+function getChatId(uid1, uid2) {
+  return uid1 < uid2 ? uid1 + '_' + uid2 : uid2 + '_' + uid1;
 }
 
 function timeAgo(date) {
   if (!date) return '';
-  const s = Math.floor((new Date() - date) / 1000);
+  var s = Math.floor((Date.now() - date.getTime()) / 1000);
   if (s < 60) return 'now';
   if (s < 3600) return Math.floor(s / 60) + 'm';
   if (s < 86400) return Math.floor(s / 3600) + 'h';
   return Math.floor(s / 86400) + 'd';
 }
 
-function getChatId(uid1, uid2) {
-  return [uid1, uid2].sort().join('_');
-}
+function ChatList(props) {
+  var onOpen = props.onOpen;
+  var [users, setUsers] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [search, setSearch] = useState('');
+  var uid = auth.currentUser ? auth.currentUser.uid : '';
 
-// ── Chat List ────────────────────────────────
-function ChatList({ onOpen }) {
-  const t = useTheme();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const uid = auth.currentUser?.uid;
-
-  useEffect(() => {
-    getDocs(collection(db, 'users')).then(snap => {
-      const all = snap.docs.map(d => d.data()).filter(u => u.uid !== uid);
-      setUsers(all);
+  useEffect(function() {
+    getDocs(collection(db, 'users')).then(function(snap) {
+      var list = snap.docs.map(function(d) { return d.data(); }).filter(function(u) { return u.uid !== uid; });
+      setUsers(list);
       setLoading(false);
     });
   }, []);
 
-  const filtered = users.filter(u =>
-    (u.username || '').toLowerCase().includes(search.toLowerCase()) ||
-    (u.name || '').toLowerCase().includes(search.toLowerCase())
-  );
+  var filtered = users.filter(function(u) {
+    var txt = search.toLowerCase();
+    return (u.username || '').toLowerCase().indexOf(txt) !== -1 ||
+           (u.name || '').toLowerCase().indexOf(txt) !== -1;
+  });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <StatusBar
-        barStyle={t.dark ? 'light-content' : 'dark-content'}
-        backgroundColor={t.headerBg}
-      />
-
-      {/* HEADER */}
-      <View style={[ls.header, { backgroundColor: t.headerBg, borderBottomColor: t.border }]}>
-        <View>
-          <Text style={[ls.title, { color: t.text }]}>Messages</Text>
-          <Text style={[ls.subtitle, { color: t.subText }]}>
-            {users.length} people
-          </Text>
-        </View>
-        <View style={[ls.headerDot, { backgroundColor: t.purple }]} />
+    <SafeAreaView style={st.safe}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+      <View style={st.header}>
+        <Text style={st.headerTitle}>Messages</Text>
       </View>
-
-      {/* SEARCH */}
-      <View style={[ls.searchWrap, { backgroundColor: t.searchBg, borderColor: t.border }]}>
-        <Text style={ls.searchIcon}>🔍</Text>
+      <View style={st.searchBar}>
+        <Text style={st.searchIco}>🔍</Text>
         <TextInput
-          style={[ls.searchInput, { color: t.text }]}
-          placeholder="Search people..."
-          placeholderTextColor={t.subText}
+          style={st.searchInput}
+          placeholder="Search..."
+          placeholderTextColor="#555"
           value={search}
           onChangeText={setSearch}
         />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Text style={{ color: t.subText, fontSize: 16 }}>✕</Text>
+        {search.length > 0 ? (
+          <TouchableOpacity onPress={function() { setSearch(''); }}>
+            <Text style={st.clearBtn}>✕</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {loading ? (
-        <View style={ls.center}>
-          <ActivityIndicator color={t.purple} size="large" />
-        </View>
+        <ActivityIndicator color="#8B5CF6" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={(item, i) => item.uid || String(i)}
-          showsVerticalScrollIndicator={false}
+          keyExtractor={function(item, i) { return item.uid || String(i); }}
           ListEmptyComponent={
-            <View style={ls.center}>
-              <Text style={ls.emptyIcon}>💬</Text>
-              <Text style={[ls.emptyText, { color: t.text }]}>No users yet</Text>
-              <Text style={[ls.emptySub, { color: t.subText }]}>Invite friends to Creature!</Text>
+            <View style={st.emptyWrap}>
+              <Text style={st.emptyIco}>💬</Text>
+              <Text style={st.emptyTxt}>No users found</Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[ls.userRow, { borderBottomColor: t.border }]}
-              onPress={() => onOpen(item, getChatId(uid, item.uid))}
-              activeOpacity={0.7}
-            >
-              {/* Avatar */}
-              <View style={ls.avatarWrap}>
-                <Image
-                  source={{ uri: item.avatar || ('https://i.pravatar.cc/100?u=' + item.uid) }}
-                  style={[ls.avatar, { borderColor: t.purple }]}
-                />
-                <View style={[ls.dot, { backgroundColor: t.onlineDot, borderColor: t.bg }]} />
-              </View>
-
-              {/* Info */}
-              <View style={ls.userInfo}>
-                <Text style={[ls.userName, { color: t.text }]}>
-                  {item.name || item.username}
-                </Text>
-                <Text style={[ls.userSub, { color: t.subText }]}>
-                  @{item.username}
-                </Text>
-              </View>
-
-              {/* Button */}
-              <View style={[ls.msgBtn, { borderColor: t.purple, backgroundColor: t.dark ? '#1E1E2E' : '#EDE8FF' }]}>
-                <Text style={[ls.msgBtnTxt, { color: t.purple }]}>Message</Text>
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={function(info) {
+            var item = info.item;
+            var chatId = getChatId(uid, item.uid);
+            return (
+              <TouchableOpacity
+                style={st.userRow}
+                onPress={function() { onOpen(item, chatId); }}
+              >
+                <View style={st.avWrap}>
+                  <Image
+                    source={{ uri: item.avatar || ('https://i.pravatar.cc/100?u=' + item.uid) }}
+                    style={st.userAv}
+                  />
+                  <View style={st.onlineDot} />
+                </View>
+                <View style={st.userInfo}>
+                  <Text style={st.userName}>{item.name || item.username}</Text>
+                  <Text style={st.userHandle}>{'@' + item.username}</Text>
+                </View>
+                <View style={st.msgBtn}>
+                  <Text style={st.msgBtnTxt}>Message</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
     </SafeAreaView>
   );
 }
 
-// ── Chat Room ────────────────────────────────
-function ChatRoom({ otherUser, chatId, onBack }) {
-  const t = useTheme();
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
-  const flatRef = useRef(null);
-  const uid = auth.currentUser?.uid;
-  const me = auth.currentUser;
+function ChatRoom(props) {
+  var otherUser = props.otherUser;
+  var chatId = props.chatId;
+  var onBack = props.onBack;
+  var [messages, setMessages] = useState([]);
+  var [text, setText] = useState('');
+  var [sending, setSending] = useState(false);
+  var listRef = useRef(null);
+  var uid = auth.currentUser ? auth.currentUser.uid : '';
+  var me = auth.currentUser;
 
-  useEffect(() => {
-    const q = query(
-      collection(db, 'chats', chatId, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
-    const unsub = onSnapshot(q, snap => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+  useEffect(function() {
+    var q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
+    return onSnapshot(q, function(snap) {
+      var list = snap.docs.map(function(d) {
+        var data = d.data();
+        data.id = d.id;
+        return data;
+      });
+      setMessages(list);
+      setTimeout(function() {
+        if (listRef.current) listRef.current.scrollToEnd({ animated: true });
+      }, 100);
     });
-    return unsub;
   }, [chatId]);
 
-  async function sendMsg() {
+  function sendMsg() {
     if (!text.trim() || sending) return;
-    const msg = text.trim();
+    var msg = text.trim();
     setText('');
     setSending(true);
-    try {
-      await addDoc(collection(db, 'chats', chatId, 'messages'), {
-        text: msg,
-        senderUid: uid,
-        senderName: me?.displayName || 'User',
-        createdAt: serverTimestamp(),
-      });
-    } catch (e) {
-      console.error(e);
-    }
-    setSending(false);
+    addDoc(collection(db, 'chats', chatId, 'messages'), {
+      text: msg,
+      senderUid: uid,
+      senderName: me ? (me.displayName || 'User') : 'User',
+      createdAt: serverTimestamp()
+    })
+    .catch(function(e) { console.error(e); })
+    .finally(function() { setSending(false); });
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <StatusBar
-        barStyle={t.dark ? 'light-content' : 'dark-content'}
-        backgroundColor={t.headerBg}
-      />
-
-      {/* HEADER */}
-      <View style={[rs.header, { backgroundColor: t.headerBg, borderBottomColor: t.border }]}>
-        <TouchableOpacity onPress={onBack} style={rs.backBtn}>
-          <Text style={[rs.backTxt, { color: t.purple }]}>←</Text>
+    <SafeAreaView style={st.safe}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+      <View style={st.roomHeader}>
+        <TouchableOpacity onPress={onBack} style={st.backBtn}>
+          <Text style={st.backTxt}>←</Text>
         </TouchableOpacity>
         <Image
           source={{ uri: otherUser.avatar || ('https://i.pravatar.cc/100?u=' + otherUser.uid) }}
-          style={[rs.avatar, { borderColor: t.purple }]}
+          style={st.roomAv}
         />
-        <View style={rs.headerInfo}>
-          <Text style={[rs.headerName, { color: t.text }]}>
-            {otherUser.name || otherUser.username}
-          </Text>
-          <Text style={rs.headerStatus}>🟢 Online</Text>
+        <View style={st.roomInfo}>
+          <Text style={st.roomName}>{otherUser.name || otherUser.username}</Text>
+          <Text style={st.roomStatus}>Online</Text>
         </View>
-        <TouchableOpacity style={rs.callBtn}>
-          <Text style={rs.callIcon}>📞</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={rs.callBtn}>
-          <Text style={rs.callIcon}>📹</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={st.callBtn}><Text>📞</Text></TouchableOpacity>
+        <TouchableOpacity style={st.callBtn}><Text>📹</Text></TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -235,68 +176,59 @@ function ChatRoom({ otherUser, chatId, onBack }) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <FlatList
-          ref={flatRef}
+          ref={listRef}
           data={messages}
-          keyExtractor={item => item.id}
+          keyExtractor={function(item) { return item.id; }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[rs.list, { backgroundColor: t.bg }]}
+          contentContainerStyle={st.msgList}
           ListEmptyComponent={
-            <View style={rs.center}>
-              <Text style={rs.emptyIcon}>👋</Text>
-              <Text style={[rs.emptyTxt, { color: t.text }]}>Pehla message bhejo!</Text>
+            <View style={st.emptyWrap}>
+              <Text style={st.emptyIco}>👋</Text>
+              <Text style={st.emptyTxt}>Say hello!</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const isMe = item.senderUid === uid;
+          renderItem={function(info) {
+            var item = info.item;
+            var isMe = item.senderUid === uid;
+            var timeStr = item.createdAt && item.createdAt.toDate ? timeAgo(item.createdAt.toDate()) : '';
             return (
-              <View style={[rs.msgRow, isMe ? rs.msgMe : rs.msgOther]}>
-                {!isMe && (
+              <View style={isMe ? st.rowMe : st.rowOther}>
+                {!isMe ? (
                   <Image
                     source={{ uri: otherUser.avatar || ('https://i.pravatar.cc/100?u=' + otherUser.uid) }}
-                    style={rs.msgAvatar}
+                    style={st.msgAv}
                   />
-                )}
-                <View style={[
-                  rs.bubble,
-                  isMe
-                    ? { backgroundColor: t.bubbleMe, borderBottomRightRadius: 4 }
-                    : { backgroundColor: t.bubbleOther, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: t.border }
-                ]}>
-                  <Text style={[rs.bubbleTxt, { color: isMe ? t.bubbleMeTxt : t.bubbleOtherTxt }]}>
-                    {item.text}
-                  </Text>
-                  <Text style={[rs.bubbleTime, { color: isMe ? 'rgba(255,255,255,0.6)' : t.subText, textAlign: isMe ? 'right' : 'left' }]}>
-                    {item.createdAt?.toDate ? timeAgo(item.createdAt.toDate()) : ''}
-                  </Text>
+                ) : null}
+                <View style={isMe ? st.bubbleMe : st.bubbleOther}>
+                  <Text style={isMe ? st.bubbleTxtMe : st.bubbleTxtOther}>{item.text}</Text>
+                  {timeStr ? <Text style={isMe ? st.timeMe : st.timeOther}>{timeStr}</Text> : null}
                 </View>
               </View>
             );
           }}
         />
 
-        {/* INPUT */}
-        <View style={[rs.inputRow, { backgroundColor: t.navBg, borderTopColor: t.border }]}>
-          <TouchableOpacity style={rs.attachBtn}>
-            <Text style={rs.attachIcon}>📎</Text>
-          </TouchableOpacity>
+        <View style={st.inputRow}>
+          <TouchableOpacity style={st.attachBtn}><Text style={{ fontSize: 20 }}>📎</Text></TouchableOpacity>
           <TextInput
-            style={[rs.input, { backgroundColor: t.inputBg, color: t.text, borderColor: t.border }]}
+            style={st.msgInput}
             placeholder="Type a message..."
-            placeholderTextColor={t.subText}
+            placeholderTextColor="#555"
             value={text}
             onChangeText={setText}
-            multiline
+            multiline={true}
             maxLength={500}
           />
           <TouchableOpacity
-            style={[rs.sendBtn, (!text.trim() || sending) && rs.sendDisabled]}
+            style={text.trim() && !sending ? st.sendBtn : st.sendBtnOff}
             onPress={sendMsg}
             disabled={!text.trim() || sending}
           >
-            {sending
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={rs.sendIcon}>➤</Text>
-            }
+            {sending ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={st.sendIco}>➤</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -304,115 +236,68 @@ function ChatRoom({ otherUser, chatId, onBack }) {
   );
 }
 
-// ── Main ─────────────────────────────────────
 export default function ChatScreen() {
-  const [activeChat, setActiveChat] = useState(null);
+  var [activeChat, setActiveChat] = useState(null);
 
   if (activeChat) {
     return (
       <ChatRoom
         otherUser={activeChat.user}
         chatId={activeChat.chatId}
-        onBack={() => setActiveChat(null)}
+        onBack={function() { setActiveChat(null); }}
       />
     );
   }
-
   return (
     <ChatList
-      onOpen={(user, chatId) => setActiveChat({ user, chatId })}
+      onOpen={function(user, chatId) { setActiveChat({ user: user, chatId: chatId }); }}
     />
   );
 }
 
-// ── Styles ───────────────────────────────────
-const ls = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  title: { fontSize: 24, fontWeight: '800' },
-  subtitle: { fontSize: 13, marginTop: 2 },
-  headerDot: { width: 10, height: 10, borderRadius: 5 },
-  searchWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    marginHorizontal: 16, marginVertical: 10,
-    borderRadius: 14, paddingHorizontal: 14,
-    borderWidth: 1,
-  },
-  searchIcon: { fontSize: 15, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, paddingVertical: 12 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 60 },
-  emptyIcon: { fontSize: 52, marginBottom: 12 },
-  emptyText: { fontSize: 18, fontWeight: '700' },
-  emptySub: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  userRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, gap: 12,
-  },
-  avatarWrap: { position: 'relative' },
-  avatar: { width: 54, height: 54, borderRadius: 27, borderWidth: 2 },
-  dot: {
-    position: 'absolute', bottom: 1, right: 1,
-    width: 14, height: 14, borderRadius: 7, borderWidth: 2,
-  },
+var st = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#0A0A0F' },
+  header: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1E1E2E' },
+  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#13131A', borderRadius: 12, marginHorizontal: 14, marginVertical: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: '#1E1E2E' },
+  searchIco: { fontSize: 15, marginRight: 8 },
+  searchInput: { flex: 1, color: '#fff', fontSize: 14, paddingVertical: 11 },
+  clearBtn: { color: '#888', fontSize: 15 },
+  emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
+  emptyIco: { fontSize: 48, marginBottom: 12 },
+  emptyTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  userRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#111', gap: 12 },
+  avWrap: { position: 'relative' },
+  userAv: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: '#8B5CF6', backgroundColor: '#222' },
+  onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 13, height: 13, borderRadius: 7, backgroundColor: '#22C55E', borderWidth: 2, borderColor: '#0A0A0F' },
   userInfo: { flex: 1 },
-  userName: { fontWeight: '700', fontSize: 15 },
-  userSub: { fontSize: 13, marginTop: 2 },
-  msgBtn: {
-    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
-    borderWidth: 1.5,
-  },
-  msgBtnTxt: { fontWeight: '700', fontSize: 13 },
-});
-
-const rs = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderBottomWidth: 1, gap: 10,
-  },
+  userName: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  userHandle: { color: '#666', fontSize: 12, marginTop: 2 },
+  msgBtn: { borderWidth: 1.5, borderColor: '#8B5CF6', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 6 },
+  msgBtnTxt: { color: '#8B5CF6', fontWeight: '700', fontSize: 12 },
+  roomHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#1E1E2E', gap: 10 },
   backBtn: { padding: 4 },
-  backTxt: { fontSize: 24, fontWeight: '600' },
-  avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 2 },
-  headerInfo: { flex: 1 },
-  headerName: { fontWeight: '700', fontSize: 16 },
-  headerStatus: { color: '#22C55E', fontSize: 12, marginTop: 1 },
+  backTxt: { color: '#8B5CF6', fontSize: 22, fontWeight: '700' },
+  roomAv: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: '#8B5CF6' },
+  roomInfo: { flex: 1 },
+  roomName: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  roomStatus: { color: '#22C55E', fontSize: 11 },
   callBtn: { padding: 6 },
-  callIcon: { fontSize: 20 },
-  list: { padding: 16, flexGrow: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 80 },
-  emptyIcon: { fontSize: 52, marginBottom: 12 },
-  emptyTxt: { fontSize: 18, fontWeight: '700' },
-  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 8 },
-  msgMe: { justifyContent: 'flex-end' },
-  msgOther: { justifyContent: 'flex-start' },
-  msgAvatar: { width: 28, height: 28, borderRadius: 14 },
-  bubble: {
-    maxWidth: width * 0.72, borderRadius: 18,
-    paddingHorizontal: 14, paddingVertical: 10, paddingBottom: 6,
-    elevation: 2,
-  },
-  bubbleTxt: { fontSize: 15, lineHeight: 21 },
-  bubbleTime: { fontSize: 10, marginTop: 4 },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    padding: 10, gap: 8, borderTopWidth: 1,
-  },
-  attachBtn: { padding: 8 },
-  attachIcon: { fontSize: 22 },
-  input: {
-    flex: 1, borderRadius: 22,
-    paddingHorizontal: 16, paddingVertical: 10,
-    fontSize: 15, maxHeight: 100, borderWidth: 1,
-  },
-  sendBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#8B5CF6',
-    justifyContent: 'center', alignItems: 'center', elevation: 4,
-  },
-  sendDisabled: { backgroundColor: '#3a3a4a' },
-  sendIcon: { color: '#fff', fontSize: 18, marginLeft: 2 },
+  msgList: { padding: 14, flexGrow: 1 },
+  rowMe: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 },
+  rowOther: { flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 8, gap: 8 },
+  msgAv: { width: 28, height: 28, borderRadius: 14 },
+  bubbleMe: { backgroundColor: '#8B5CF6', borderRadius: 18, borderBottomRightRadius: 4, paddingHorizontal: 14, paddingVertical: 10, maxWidth: W * 0.7 },
+  bubbleOther: { backgroundColor: '#13131A', borderRadius: 18, borderBottomLeftRadius: 4, paddingHorizontal: 14, paddingVertical: 10, maxWidth: W * 0.7, borderWidth: 1, borderColor: '#1E1E2E' },
+  bubbleTxtMe: { color: '#fff', fontSize: 14, lineHeight: 20 },
+  bubbleTxtOther: { color: '#e0e0e0', fontSize: 14, lineHeight: 20 },
+  timeMe: { color: 'rgba(255,255,255,0.55)', fontSize: 10, marginTop: 4, textAlign: 'right' },
+  timeOther: { color: '#555', fontSize: 10, marginTop: 4 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', padding: 10, borderTopWidth: 1, borderTopColor: '#1E1E2E', gap: 8 },
+  attachBtn: { padding: 6 },
+  msgInput: { flex: 1, backgroundColor: '#13131A', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: '#fff', fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: '#1E1E2E' },
+  sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center' },
+  sendBtnOff: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#2a2a3a', justifyContent: 'center', alignItems: 'center' },
+  sendIco: { color: '#fff', fontSize: 16, marginLeft: 2 }
 });
+    
