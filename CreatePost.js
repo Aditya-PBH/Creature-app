@@ -268,4 +268,4 @@ var st = StyleSheet.create({
   postBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   postBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 16 }
 });
-        
+            
