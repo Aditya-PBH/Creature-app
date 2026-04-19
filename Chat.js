@@ -217,4 +217,4 @@ var s = StyleSheet.create({
   sendBtnOff: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E0D4FF', justifyContent: 'center', alignItems: 'center' },
   sendIco: { color: '#fff', fontSize: 16, marginLeft: 2 }
 });
-    
+  
